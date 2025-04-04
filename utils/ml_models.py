@@ -20,38 +20,77 @@ def prepare_features(data):
     Returns:
     --------
     pandas.DataFrame
-        DataFrame with features for ML models
+        DataFrame with features for ML models, and list of feature names
     """
     # Create a copy of the data
     df = data.copy()
     
-    # Select features for the model
-    features = [
-        'RSI_14', 'STOCHk_14_3_3', 'BBP_20_2', 'MACDh_12_26_9', 'ATR_Pct', 'Volume_Ratio'
+    # Check for required columns
+    required_cols = ['RSI_14', 'STOCHk_14_3_3', 'BBP_20_2', 'MACDh_12_26_9', 'ATR_Pct', 'Return']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    
+    if missing_cols:
+        # If missing columns, print info for debugging and return empty data
+        print(f"Warning: Missing columns for ML model: {missing_cols}")
+        print(f"Available columns: {df.columns.tolist()}")
+        return pd.DataFrame(), []
+    
+    # Select features for the model - only include those that exist
+    base_features = [
+        'RSI_14', 'STOCHk_14_3_3', 'BBP_20_2', 'MACDh_12_26_9', 'ATR_Pct'
     ]
+    
+    # Filter to only include columns that exist
+    features = [f for f in base_features if f in df.columns]
+    
+    # Add Volume Ratio if available
+    if 'Volume_Ratio' in df.columns:
+        features.append('Volume_Ratio')
+    elif 'Volume' in df.columns and 'Avg_Vol_50' in df.columns:
+        # Calculate volume ratio if not already present
+        df['Volume_Ratio'] = df['Volume'] / df['Avg_Vol_50']
+        features.append('Volume_Ratio')
     
     # Add price-based features
     if 'SMA_50' in df.columns and 'SMA_200' in df.columns:
         df['SMA_50_200_Ratio'] = df['SMA_50'] / df['SMA_200']
         features.append('SMA_50_200_Ratio')
     
-    if 'EMA_20' in df.columns:
+    if 'EMA_20' in df.columns and 'Close' in df.columns:
         df['EMA_20_Close_Ratio'] = df['EMA_20'] / df['Close']
         features.append('EMA_20_Close_Ratio')
     
     # Add lagged returns
-    for lag in [1, 5, 10, 20]:
-        df[f'Return_Lag_{lag}'] = df['Return'].shift(lag)
-        features.append(f'Return_Lag_{lag}')
+    if 'Return' in df.columns:
+        for lag in [1, 5, 10, 20]:
+            df[f'Return_Lag_{lag}'] = df['Return'].shift(lag)
+            features.append(f'Return_Lag_{lag}')
+        
+        # Calculate rolling volatility
+        df['Volatility_20'] = df['Return'].rolling(window=20).std()
+        features.append('Volatility_20')
     
-    # Calculate rolling volatility
-    df['Volatility_20'] = df['Return'].rolling(window=20).std()
-    features.append('Volatility_20')
+    if not features:
+        print("Warning: No valid features available for ML model.")
+        return pd.DataFrame(), []
     
-    # Remove rows with NaN values
-    df = df.dropna(subset=features)
+    # Drop NaN values in feature columns
+    df_clean = df.dropna(subset=features)
     
-    return df, features
+    # Check if we have enough data left
+    if len(df_clean) < 50:  # Arbitrary threshold - need enough data for training
+        print(f"Warning: Not enough data after removing NaN values: {len(df_clean)} rows")
+        return pd.DataFrame(), []
+    
+    # Debug: Check target columns
+    for period in ['1W', '1M', '3M', '6M', '1Y', '3Y']:
+        col_name = f'Fwd_Ret_{period}'
+        if col_name in df_clean.columns:
+            non_nan = df_clean[col_name].count()
+            percent = (non_nan / len(df_clean)) * 100
+            print(f"Column {col_name}: {non_nan}/{len(df_clean)} non-NaN values ({percent:.1f}%)")
+    
+    return df_clean, features
 
 def train_model(data, features, target_column, model_type='random_forest', test_size=0.2):
     """

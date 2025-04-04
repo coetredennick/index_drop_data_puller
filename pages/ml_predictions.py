@@ -164,8 +164,8 @@ def show_ml_predictions():
             # Prepare features
             data, features = prepare_features(st.session_state.data)
             
-            # Select target column
-            target_column = f'Fwd_Ret_{target_period.lower()}'
+            # Select target column - using uppercase for consistency with data_fetcher.py
+            target_column = f'Fwd_Ret_{target_period}'
             
             if target_column not in data.columns:
                 st.error(f"Target column '{target_column}' not found in data.")
