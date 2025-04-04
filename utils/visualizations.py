@@ -260,8 +260,12 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
     if pd.Timestamp(end_date).date() > current_date:
         end_date = current_date
     
+    # Convert dates to pandas Timestamps for comparison with DatetimeIndex
+    start_ts = pd.Timestamp(start_date)
+    end_ts = pd.Timestamp(end_date)
+    
     # Filter data for the selected period
-    mask = (data.index >= start_date) & (data.index <= end_date)
+    mask = (data.index >= start_ts) & (data.index <= end_ts)
     period_data = data.loc[mask].copy()
     
     if period_data.empty:
@@ -485,8 +489,12 @@ def create_technical_indicator_chart(data, event, indicator, title=None, height=
     if pd.Timestamp(end_date).date() > current_date:
         end_date = current_date
     
+    # Convert dates to pandas Timestamps for comparison with DatetimeIndex
+    start_ts = pd.Timestamp(start_date)
+    end_ts = pd.Timestamp(end_date)
+    
     # Filter data for the selected period
-    mask = (data.index >= start_date) & (data.index <= end_date)
+    mask = (data.index >= start_ts) & (data.index <= end_ts)
     period_data = data.loc[mask].copy()
     
     if period_data.empty or indicator not in period_data.columns:
