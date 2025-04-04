@@ -288,7 +288,7 @@ def show_ml_predictions():
                     
                     returns_after_drops.append({
                         'Date': event_date,
-                        'Drop (%)': event['magnitude'],
+                        'Drop (%)': event['drop_pct'],
                         'Return 1W (%)': fwd_returns.get('1W', None),
                         'Return 1M (%)': fwd_returns.get('1M', None),
                         'Return 3M (%)': fwd_returns.get('3M', None)
