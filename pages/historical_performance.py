@@ -128,17 +128,13 @@ def show_historical_performance():
     agg_returns_df = agg_returns_df.set_index('Time Period')
     
     # Function to apply color formatting
-    def color_scale(val, column_name):
+    def color_scale(val):
         if pd.isna(val):
             return ''
         
         # For percentage columns
         if isinstance(val, (int, float)):
-            if 'Positive Outcomes' in column_name:
-                # Green scale for positive outcomes
-                color_val = min(1.0, max(0.0, val / 100))
-                return f'background-color: rgba(0, 128, 0, {color_val:.2f})'
-            elif val > 0:
+            if val > 0:
                 # Green for positive returns
                 color_val = min(1.0, max(0.0, val / 20))
                 return f'background-color: rgba(0, 128, 0, {color_val:.2f})'
@@ -148,11 +144,20 @@ def show_historical_performance():
                 return f'background-color: rgba(255, 0, 0, {color_val:.2f})'
         return ''
     
-    # Apply styling to the DataFrame using applymap with axis=None
-    styled_df = agg_returns_df.style.format('{:.2f}').applymap(
-        lambda v, col_name=None: color_scale(v, col_name),
-        subset=None
-    )
+    # Apply styling to the DataFrame
+    styled_df = agg_returns_df.style.format('{:.2f}')
+    
+    # Apply color formatting to each column
+    for col in agg_returns_df.columns:
+        if "Positive Outcomes" in col:
+            # Special coloring for positive outcomes column
+            styled_df = styled_df.applymap(
+                lambda x: f'background-color: rgba(0, 128, 0, {min(1.0, max(0.0, x / 100)):.2f})' if not pd.isna(x) else '',
+                subset=col
+            )
+        else:
+            # Regular coloring for other columns
+            styled_df = styled_df.applymap(color_scale, subset=col)
     
     # Display the table
     st.table(styled_df)
@@ -208,35 +213,39 @@ def show_historical_performance():
     severity_returns_df = severity_returns_df.set_index('Severity')
     
     # Apply styling to the DataFrame
-    def color_severity_scale(val, column_name):
+    def color_return_scale(val):
         if pd.isna(val):
             return ''
         
-        # For count column
-        if 'Count' in column_name:
-            return ''
-        
-        # For percentage columns with 'Positive' in name
-        if 'Positive' in column_name:
-            # Green scale for positive outcomes
-            color_val = min(1.0, max(0.0, val / 100))
-            return f'background-color: rgba(0, 128, 0, {color_val:.2f})'
-        
         # For return percentage columns
-        if val > 0:
-            # Green for positive returns
-            color_val = min(1.0, max(0.0, val / 20))
-            return f'background-color: rgba(0, 128, 0, {color_val:.2f})'
-        else:
-            # Red for negative returns
-            color_val = min(1.0, max(0.0, abs(val) / 20))
-            return f'background-color: rgba(255, 0, 0, {color_val:.2f})'
+        if isinstance(val, (int, float)):
+            if val > 0:
+                # Green for positive returns
+                color_val = min(1.0, max(0.0, val / 20))
+                return f'background-color: rgba(0, 128, 0, {color_val:.2f})'
+            else:
+                # Red for negative returns
+                color_val = min(1.0, max(0.0, abs(val) / 20))
+                return f'background-color: rgba(255, 0, 0, {color_val:.2f})'
+        return ''
     
     # Apply styling to the DataFrame
-    styled_severity_df = severity_returns_df.style.format('{:.2f}').applymap(
-        lambda v, col_name=None: color_severity_scale(v, col_name),
-        subset=None
-    )
+    styled_severity_df = severity_returns_df.style.format('{:.2f}')
+    
+    # Apply color formatting to each column
+    for col in severity_returns_df.columns:
+        if col == 'Count':
+            # No coloring for Count column
+            continue
+        elif 'Positive' in col:
+            # Special coloring for positive percentage columns
+            styled_severity_df = styled_severity_df.applymap(
+                lambda x: f'background-color: rgba(0, 128, 0, {min(1.0, max(0.0, x / 100)):.2f})' if not pd.isna(x) else '',
+                subset=col
+            )
+        else:
+            # Regular coloring for return columns
+            styled_severity_df = styled_severity_df.applymap(color_return_scale, subset=col)
     
     # Display the table
     st.table(styled_severity_df)

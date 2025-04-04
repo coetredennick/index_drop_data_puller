@@ -1,0 +1,58 @@
+Aggregate Return Analysis After Market Drops
+TypeError: argument of type 'NoneType' is not iterable
+Traceback:
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 121, in exec_func_with_error_handling
+    result = func()
+             ^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 640, in code_to_exec
+    exec(code, module.__dict__)
+File "/home/runner/workspace/app.py", line 202, in <module>
+    show_historical_performance()
+File "/home/runner/workspace/pages/historical_performance.py", line 158, in show_historical_performance
+    st.table(styled_df)
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/metrics_util.py", line 410, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/elements/arrow.py", line 732, in table
+    marshall(proto, data, default_uuid)
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/elements/arrow.py", line 959, in marshall
+    marshall_styler(proto, data, default_uuid)
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/elements/lib/pandas_styler_utils.py", line 62, in marshall_styler
+    styler._compute()
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/pandas/io/formats/style_render.py", line 256, in _compute
+    r = func(self)(*args, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/pandas/io/formats/style.py", line 2027, in _map
+    result = self.data.loc[subset].map(func)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/pandas/core/frame.py", line 10468, in map
+    return self.apply(infer).__finalize__(self, "map")
+           ^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/pandas/core/frame.py", line 10374, in apply
+    return op.apply().__finalize__(self, method="apply")
+           ^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/pandas/core/apply.py", line 916, in apply
+    return self.apply_standard()
+           ^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/pandas/core/apply.py", line 1063, in apply_standard
+    results, res_index = self.apply_series_generator()
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/pandas/core/apply.py", line 1081, in apply_series_generator
+    results[i] = self.func(v, *self.args, **self.kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/pandas/core/frame.py", line 10466, in infer
+    return x._map_values(func, na_action=na_action)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/pandas/core/base.py", line 921, in _map_values
+    return algorithms.map_array(arr, mapper, na_action=na_action, convert=convert)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/pandas/core/algorithms.py", line 1743, in map_array
+    return lib.map_infer(values, mapper, convert=convert)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "lib.pyx", line 2972, in pandas._libs.lib.map_infer
+File "/home/runner/workspace/pages/historical_performance.py", line 153, in <lambda>
+    lambda v, col_name=None: color_scale(v, col_name),
+                             ^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/pages/historical_performance.py", line 137, in color_scale
+    if 'Positive Outcomes' in column_name:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
