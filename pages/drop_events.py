@@ -81,14 +81,14 @@ def show_drop_events():
         if selected_event['type'] == 'single_day':
             st.metric(
                 "Drop Magnitude", 
-                f"{selected_event['drop_pct']:.2f}%",
+                f"{selected_event['drop_pct']:.1f}%",
                 delta=None,
                 delta_color="inverse"
             )
         else:
             st.metric(
                 "Cumulative Drop", 
-                f"{selected_event['cumulative_drop']:.2f}%",
+                f"{selected_event['cumulative_drop']:.1f}%",
                 delta=f"{selected_event['num_days']} days",
                 delta_color="inverse"
             )
@@ -133,7 +133,7 @@ def show_drop_events():
                 st.metric(
                     "High", 
                     f"${drop_day['High']:.2f}",
-                    delta=f"{((drop_day['High'] / drop_day['Open']) - 1) * 100:.2f}%",
+                    delta=f"{((drop_day['High'] / drop_day['Open']) - 1) * 100:.1f}%",
                     delta_color="normal"
                 )
             
@@ -141,7 +141,7 @@ def show_drop_events():
                 st.metric(
                     "Low", 
                     f"${drop_day['Low']:.2f}",
-                    delta=f"{((drop_day['Low'] / drop_day['Open']) - 1) * 100:.2f}%",
+                    delta=f"{((drop_day['Low'] / drop_day['Open']) - 1) * 100:.1f}%",
                     delta_color="normal"
                 )
             
@@ -149,7 +149,7 @@ def show_drop_events():
                 st.metric(
                     "Close", 
                     f"${drop_day['Close']:.2f}",
-                    delta=f"{((drop_day['Close'] / drop_day['Open']) - 1) * 100:.2f}%",
+                    delta=f"{((drop_day['Close'] / drop_day['Open']) - 1) * 100:.1f}%",
                     delta_color="normal"
                 )
             
@@ -170,7 +170,7 @@ def show_drop_events():
                 if 'HL_Range' in drop_day:
                     st.metric(
                         "High-Low Range", 
-                        f"{drop_day['HL_Range']:.2f}%"
+                        f"{drop_day['HL_Range']:.1f}%"
                     )
     else:
         # Consecutive day drop - show table with data for each day
@@ -196,22 +196,31 @@ def show_drop_events():
             price_data['Date'] = price_data['Date'].dt.strftime('%Y-%m-%d')
             
             # Function to apply color formatting
-            def color_negative_red(val):
-                if isinstance(val, (int, float)):
-                    if 'Change' in val.name and val < 0:
+            def color_negative_red(val, props=''):
+                if isinstance(val, (int, float)) and props.startswith('Daily Change'):
+                    if val < 0:
                         return 'color: red'
                 return ''
             
-            # Apply styling
+            # Apply styling with smaller font and decimal formatting
             styled_price_data = price_data.style.format({
                 'Open': '${:.2f}',
                 'High': '${:.2f}',
                 'Low': '${:.2f}',
                 'Close': '${:.2f}',
-                'Daily Change (%)': '{:.2f}%',
+                'Daily Change (%)': '{:.1f}%',
                 'Volume': '{:,.0f}',
-                'Volume vs Avg': '{:.2f}x'
-            }).applymap(color_negative_red)
+                'Volume vs Avg': '{:.1f}x'
+            })
+            
+            # Add custom CSS for smaller font and better spacing
+            styled_price_data = styled_price_data.set_table_styles([
+                {'selector': 'td', 'props': [('font-size', '12px'), ('padding', '4px 8px')]},
+                {'selector': 'th', 'props': [('font-size', '12px'), ('padding', '4px 8px')]}
+            ])
+            
+            # Apply color formatting using map (replacing deprecated applymap)
+            styled_price_data = styled_price_data.map(color_negative_red)
             
             # Display the table
             st.dataframe(styled_price_data)
@@ -234,7 +243,7 @@ def show_drop_events():
             with col3:
                 st.metric(
                     "Total Change", 
-                    f"{((period_data['Close'].iloc[-1] / period_data['Open'].iloc[0]) - 1) * 100:.2f}%",
+                    f"{((period_data['Close'].iloc[-1] / period_data['Open'].iloc[0]) - 1) * 100:.1f}%",
                     delta_color="inverse"
                 )
     
@@ -267,7 +276,7 @@ def show_drop_events():
                 
                 st.metric(
                     period_label, 
-                    f"{value:.2f}%",
+                    f"{value:.1f}%",
                     delta=None,
                     delta_color=delta_color
                 )
@@ -316,7 +325,7 @@ def show_drop_events():
                     f"""
                     <div style="border:1px solid {border_color}; border-radius:5px; padding:10px; background-color:{card_color}; margin-bottom:10px;">
                         <h4 style="margin:0; color:{text_color};">{explanation['title']}</h4>
-                        <div style="font-size:24px; font-weight:bold; margin:5px 0;">{value:.2f}</div>
+                        <div style="font-size:24px; font-weight:bold; margin:5px 0;">{value:.1f}</div>
                         <p style="margin:0; font-size:12px;">{explanation['explanation']}</p>
                     </div>
                     """,

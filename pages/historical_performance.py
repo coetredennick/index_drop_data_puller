@@ -144,20 +144,28 @@ def show_historical_performance():
                 return f'background-color: rgba(255, 0, 0, {color_val:.2f})'
         return ''
     
-    # Apply styling to the DataFrame
-    styled_df = agg_returns_df.style.format('{:.2f}')
+    # Apply styling to the DataFrame with smaller font and 1 decimal place with % sign
+    format_dict = {col: '{:.1f}%' for col in agg_returns_df.columns}
+    styled_df = agg_returns_df.style.format(format_dict)
+    
+    # Add custom CSS for smaller font
+    styled_df = styled_df.set_table_styles([
+        {'selector': 'td', 'props': [('font-size', '12px'), ('padding', '5px 10px')]},
+        {'selector': 'th', 'props': [('font-size', '12px'), ('padding', '5px 10px')]}
+    ])
     
     # Apply color formatting to each column
     for col in agg_returns_df.columns:
         if "Positive Outcomes" in col:
             # Special coloring for positive outcomes column
-            styled_df = styled_df.applymap(
+            # Use map instead of deprecated applymap
+            styled_df = styled_df.map(
                 lambda x: f'background-color: rgba(0, 128, 0, {min(1.0, max(0.0, x / 100)):.2f})' if not pd.isna(x) else '',
-                subset=col
+                subset=pd.IndexSlice[:, col]
             )
         else:
             # Regular coloring for other columns
-            styled_df = styled_df.applymap(color_scale, subset=col)
+            styled_df = styled_df.map(color_scale, subset=pd.IndexSlice[:, col])
     
     # Display the table
     st.table(styled_df)
@@ -229,8 +237,21 @@ def show_historical_performance():
                 return f'background-color: rgba(255, 0, 0, {color_val:.2f})'
         return ''
     
-    # Apply styling to the DataFrame
-    styled_severity_df = severity_returns_df.style.format('{:.2f}')
+    # Apply styling to the DataFrame with smaller font and 1 decimal place
+    format_dict = {'Count': '{:.0f}'}  # No decimal for Count
+    
+    # Add % sign to percentage columns
+    for col in severity_returns_df.columns:
+        if col != 'Count':
+            format_dict[col] = '{:.1f}%'
+    
+    styled_severity_df = severity_returns_df.style.format(format_dict)
+    
+    # Add custom CSS for smaller font
+    styled_severity_df = styled_severity_df.set_table_styles([
+        {'selector': 'td', 'props': [('font-size', '12px'), ('padding', '5px 10px')]},
+        {'selector': 'th', 'props': [('font-size', '12px'), ('padding', '5px 10px')]}
+    ])
     
     # Apply color formatting to each column
     for col in severity_returns_df.columns:
@@ -239,13 +260,14 @@ def show_historical_performance():
             continue
         elif 'Positive' in col:
             # Special coloring for positive percentage columns
-            styled_severity_df = styled_severity_df.applymap(
+            # Use map instead of deprecated applymap
+            styled_severity_df = styled_severity_df.map(
                 lambda x: f'background-color: rgba(0, 128, 0, {min(1.0, max(0.0, x / 100)):.2f})' if not pd.isna(x) else '',
-                subset=col
+                subset=pd.IndexSlice[:, col]
             )
         else:
             # Regular coloring for return columns
-            styled_severity_df = styled_severity_df.applymap(color_return_scale, subset=col)
+            styled_severity_df = styled_severity_df.map(color_return_scale, subset=pd.IndexSlice[:, col])
     
     # Display the table
     st.table(styled_severity_df)
@@ -300,8 +322,20 @@ def show_historical_performance():
             
         return ''
     
-    # Apply styling
-    styled_events_df = events_df.style.applymap(color_cell)
+    # Create format dictionary for the detailed table
+    format_dict = {}
+    for col in events_df.columns:
+        if '%' in col:  # Format percentage columns
+            format_dict[col] = '{:.1f}%'
+    
+    # Apply styling with formatting and smaller text using map (replaces deprecated applymap)
+    styled_events_df = events_df.style.map(color_cell).format(format_dict)
+    
+    # Add custom CSS for smaller font
+    styled_events_df = styled_events_df.set_table_styles([
+        {'selector': 'td', 'props': [('font-size', '11px'), ('padding', '3px 8px')]},
+        {'selector': 'th', 'props': [('font-size', '11px'), ('padding', '3px 8px')]}
+    ])
     
     # Display the table
     st.dataframe(styled_events_df, height=400)
