@@ -34,6 +34,10 @@ def fetch_sp500_data(start_date, end_date):
         # Basic data cleaning
         if sp500.empty:
             return None
+        
+        # Fix for MultiIndex columns - flatten the columns
+        if isinstance(sp500.columns, pd.MultiIndex):
+            sp500.columns = [col[0] for col in sp500.columns]
             
         # Calculate daily returns
         sp500['Return'] = sp500['Close'].pct_change() * 100
