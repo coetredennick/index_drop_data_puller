@@ -46,16 +46,18 @@ st.markdown("""
     
     /* Tab styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 1px;
+        gap: 8px;
     }
     .stTabs [data-baseweb="tab"] {
         height: 50px;
         white-space: pre-wrap;
         background-color: #f8f9fa;
         border-radius: 4px 4px 0 0;
-        gap: 1px;
         padding-top: 10px;
         padding-bottom: 10px;
+        padding-left: 20px;
+        padding-right: 20px;
+        margin-right: 5px;
     }
     .stTabs [aria-selected="true"] {
         background-color: white;
