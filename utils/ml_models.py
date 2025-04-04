@@ -8,7 +8,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-def prepare_features(data):
+def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
     """
     Prepare features for machine learning models
     
@@ -16,6 +16,10 @@ def prepare_features(data):
     -----------
     data : pandas.DataFrame
         DataFrame containing S&P 500 historical data with technical indicators
+    focus_on_drops : bool, optional
+        Whether to focus specifically on market drop events
+    drop_threshold : float, optional
+        Percentage threshold for considering a day as a market drop
         
     Returns:
     --------
@@ -70,9 +74,59 @@ def prepare_features(data):
         df['Volatility_20'] = df['Return'].rolling(window=20).std()
         features.append('Volatility_20')
     
+    # Add features specifically focused on market drops
+    # Identify consecutive drop days
+    if 'Return' in df.columns:
+        # Mark significant drop days
+        df['Is_Drop_Day'] = df['Return'] <= drop_threshold
+        
+        # Count consecutive drop days
+        df['Drop_Streak'] = 0
+        current_streak = 0
+        
+        for i in range(len(df)):
+            if df['Is_Drop_Day'].iloc[i]:
+                current_streak += 1
+            else:
+                current_streak = 0
+            df['Drop_Streak'].iloc[i] = current_streak
+        
+        features.append('Drop_Streak')
+        
+        # Calculate magnitude of drops (cumulative over streaks)
+        df['Cumulative_Drop'] = 0
+        cumulative = 0
+        
+        for i in range(len(df)):
+            if df['Is_Drop_Day'].iloc[i]:
+                cumulative += df['Return'].iloc[i]
+            else:
+                cumulative = 0
+            df['Cumulative_Drop'].iloc[i] = cumulative
+        
+        features.append('Cumulative_Drop')
+        
+        # Add recent market behavior features
+        df['Recent_Max_Drop'] = df['Return'].rolling(window=10).min()
+        df['Recent_Volatility'] = df['Return'].rolling(window=10).std()
+        
+        features.extend(['Recent_Max_Drop', 'Recent_Volatility'])
+    
     if not features:
         print("Warning: No valid features available for ML model.")
         return pd.DataFrame(), []
+    
+    # Focus specifically on market drops if requested
+    if focus_on_drops and 'Return' in df.columns:
+        print(f"Focusing on market drops (threshold: {drop_threshold}%)")
+        # Either a drop day or the day after a drop or in a streak
+        drop_condition = (
+            (df['Return'] <= drop_threshold) | 
+            (df['Return'].shift(1) <= drop_threshold) | 
+            (df['Drop_Streak'] > 0)
+        )
+        df = df[drop_condition].copy()
+        print(f"Filtered to {len(df)} market drop events for training")
     
     # Drop NaN values in feature columns
     df_clean = df.dropna(subset=features)

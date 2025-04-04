@@ -158,11 +158,35 @@ def show_ml_predictions():
             help="Proportion of data to use for testing the model"
         )
     
+    # Add market drop threshold controls
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        drop_threshold = st.slider(
+            "Market Drop Threshold (%)",
+            min_value=-10.0,
+            max_value=-1.0,
+            value=-3.0,
+            step=0.5,
+            help="Minimum percentage drop to be considered a significant market event"
+        )
+    
+    with col2:
+        focus_on_drops = st.checkbox(
+            "Focus on Market Drops",
+            value=True,
+            help="When enabled, the model will specifically focus on data from market drop events"
+        )
+    
     # Train model button
-    if st.button("Train Model"):
-        with st.spinner(f"Training {model_type} model for {target_period} returns..."):
-            # Prepare features
-            data, features = prepare_features(st.session_state.data)
+    if st.button("Train Model on Market Drops"):
+        with st.spinner(f"Training {model_type} model for {target_period} returns after market drops..."):
+            # Prepare features with drop focus
+            data, features = prepare_features(
+                st.session_state.data,
+                focus_on_drops=focus_on_drops,
+                drop_threshold=drop_threshold
+            )
             
             # Select target column - using uppercase for consistency with data_fetcher.py
             target_column = f'Fwd_Ret_{target_period}'
@@ -181,15 +205,150 @@ def show_ml_predictions():
                 
                 # Store the model in session state
                 st.session_state.ml_models[target_period] = model_result
+                st.session_state.drop_training_data = data
                 
                 if model_result['success']:
-                    st.success(f"Model trained successfully for {target_period} returns!")
+                    # Count number of drop events
+                    drop_events_count = len(data)
+                    st.success(f"Model trained successfully on {drop_events_count} market drop events for {target_period} returns!")
                 else:
                     st.error(f"Model training failed: {model_result.get('error', 'Unknown error')}")
     
+    # Current market conditions assessment
+    latest_data = st.session_state.data.iloc[-1]
+    latest_date = latest_data.name.strftime('%Y-%m-%d') if hasattr(latest_data.name, 'strftime') else str(latest_data.name)
+    latest_close = latest_data['Close']
+    latest_return = latest_data['Return'] if 'Return' in latest_data else 0
+    
+    # Check if we are in a drop event based on threshold
+    is_current_drop = latest_return <= drop_threshold
+    
+    # Display current market status
+    st.markdown("#### Current Market Status")
+    cols = st.columns([2, 1, 1])
+    
+    with cols[0]:
+        st.markdown(f"""
+        <div style="padding: 15px; border-radius: 5px; background-color: {'#f8d7da' if is_current_drop else '#d4edda'}; margin-bottom: 15px;">
+            <h3 style="margin:0; color: {'#721c24' if is_current_drop else '#155724'};">
+                {'⚠️ Market Drop Detected' if is_current_drop else '✅ Normal Market Conditions'}
+            </h3>
+            <p style="margin-top:5px; margin-bottom:0;">
+                S&P 500: ${latest_close:.2f} | Daily change: {latest_return:.2f}% | Date: {latest_date}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Recent market activity
+    recent_data = st.session_state.data.tail(10)
+    recent_returns = recent_data['Return'].tolist() if 'Return' in recent_data else [0]
+    min_recent_return = min(recent_returns)
+    
+    with cols[1]:
+        st.metric("10-Day Min Return", f"{min_recent_return:.2f}%", delta=None)
+    
+    with cols[2]:
+        volatility = recent_data['Return'].std() if 'Return' in recent_data else 0
+        st.metric("10-Day Volatility", f"{volatility:.2f}%", delta=None)
+    
     # Check if a model has been trained
     if st.session_state.ml_models[target_period] is None:
-        st.warning("No model trained yet. Please train a model using the button above.")
+        # Show historical drop statistics instead
+        st.markdown("#### Historical Market Drop Analysis")
+        st.info("""
+        No model trained yet. Please train a model using the button above.
+        
+        While we don't have a model yet, here's what historical data tells us about market drops:
+        """)
+        
+        # Calculate some basic statistics about drops
+        from utils.event_detection import detect_drop_events
+        
+        if 'Return' in st.session_state.data.columns:
+            # Detect drop events using the threshold
+            drop_events = detect_drop_events(st.session_state.data, abs(drop_threshold))
+            
+            if drop_events:
+                num_events = len(drop_events)
+                
+                # Create a dataframe with returns after drops
+                returns_after_drops = []
+                for event in drop_events:
+                    event_date = event['date']
+                    event_idx = st.session_state.data.index.get_loc(event_date)
+                    
+                    # Calculate forward returns if possible
+                    fwd_returns = {}
+                    for days, period in [(5, '1W'), (21, '1M'), (63, '3M')]:
+                        if event_idx + days < len(st.session_state.data):
+                            start_price = st.session_state.data['Close'].iloc[event_idx]
+                            end_price = st.session_state.data['Close'].iloc[event_idx + days]
+                            fwd_return = (end_price / start_price - 1) * 100
+                            fwd_returns[period] = fwd_return
+                    
+                    returns_after_drops.append({
+                        'Date': event_date,
+                        'Drop (%)': event['magnitude'],
+                        'Return 1W (%)': fwd_returns.get('1W', None),
+                        'Return 1M (%)': fwd_returns.get('1M', None),
+                        'Return 3M (%)': fwd_returns.get('3M', None)
+                    })
+                
+                # Convert to dataframe
+                if returns_after_drops:
+                    df_returns = pd.DataFrame(returns_after_drops)
+                    
+                    # Calculate statistics
+                    positive_1w = (df_returns['Return 1W (%)'] > 0).mean() * 100
+                    positive_1m = (df_returns['Return 1M (%)'] > 0).mean() * 100
+                    positive_3m = (df_returns['Return 3M (%)'] > 0).mean() * 100
+                    
+                    avg_1w = df_returns['Return 1W (%)'].mean()
+                    avg_1m = df_returns['Return 1M (%)'].mean()
+                    avg_3m = df_returns['Return 3M (%)'].mean()
+                    
+                    # Display insights
+                    st.markdown(f"""
+                    Based on analysis of {num_events} historical drop events of {abs(drop_threshold)}% or more:
+                    
+                    - **1 Week Later**: {positive_1w:.1f}% of drops led to positive returns (Avg: {avg_1w:.2f}%)
+                    - **1 Month Later**: {positive_1m:.1f}% of drops led to positive returns (Avg: {avg_1m:.2f}%)
+                    - **3 Months Later**: {positive_3m:.1f}% of drops led to positive returns (Avg: {avg_3m:.2f}%)
+                    """)
+                    
+                    # Show distribution chart
+                    import plotly.express as px
+                    
+                    # Create a distribution chart for the selected period
+                    selected_period = 'Return 1M (%)' # Default to 1M
+                    if target_period == '1W':
+                        selected_period = 'Return 1W (%)'
+                    elif target_period == '3M':
+                        selected_period = 'Return 3M (%)'
+                    
+                    fig = px.histogram(
+                        df_returns, 
+                        x=selected_period,
+                        nbins=30,
+                        title=f"Distribution of {target_period} Returns After {abs(drop_threshold)}%+ Drops",
+                        labels={selected_period: f'{target_period} Return (%)'},
+                        color_discrete_sequence=['rgba(0, 0, 255, 0.6)']
+                    )
+                    
+                    # Add vertical line at 0
+                    fig.add_vline(x=0, line_width=2, line_dash="dash", line_color="red")
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Show the most recent drop events
+                    st.markdown("#### Recent Market Drop Events")
+                    st.dataframe(
+                        df_returns.sort_values('Date', ascending=False).head(10),
+                        use_container_width=True
+                    )
+            else:
+                st.warning(f"No market drops of {abs(drop_threshold)}% or more detected in the selected date range.")
+        
         return
     
     # Get the trained model
@@ -251,11 +410,132 @@ def show_ml_predictions():
         )
         st.plotly_chart(feat_chart, use_container_width=True)
     
+    # Add drop events analysis from model training data
+    if 'drop_training_data' in st.session_state and focus_on_drops:
+        st.markdown("#### Market Drop Analysis")
+        
+        drop_data = st.session_state.drop_training_data
+        
+        # Create tab view
+        tab1, tab2 = st.tabs(["Post-Drop Returns", "Event Characteristics"])
+        
+        with tab1:
+            # Calculate statistics for the selected period
+            target_col = f'Fwd_Ret_{target_period}'
+            if target_col in drop_data.columns:
+                returns_series = drop_data[target_col].dropna()
+                
+                # Basic statistics
+                positive_pct = (returns_series > 0).mean() * 100
+                avg_return = returns_series.mean()
+                median_return = returns_series.median()
+                best_return = returns_series.max()
+                worst_return = returns_series.min()
+                
+                # Display summary statistics
+                st.markdown(f"""
+                **Post-Drop Return Statistics ({target_period})**
+                
+                From {len(returns_series)} historical drop events:
+                - **Positive Outcomes**: {positive_pct:.1f}% of events led to positive returns
+                - **Average Return**: {avg_return:.2f}%
+                - **Median Return**: {median_return:.2f}%
+                - **Best Recovery**: +{best_return:.2f}%
+                - **Worst Outcome**: {worst_return:.2f}%
+                """)
+                
+                # Create a histogram
+                import plotly.express as px
+                fig = px.histogram(
+                    returns_series,
+                    nbins=30,
+                    title=f"Distribution of {target_period} Returns After Market Drops",
+                    labels={'value': f'{target_period} Return (%)'},
+                    color_discrete_sequence=['rgba(0, 0, 255, 0.6)']
+                )
+                
+                # Add vertical line at 0
+                fig.add_vline(x=0, line_width=2, line_dash="dash", line_color="red")
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+        with tab2:
+            # Examine drop characteristics
+            if 'Drop_Streak' in drop_data.columns:
+                # Calculate distributions
+                streak_counts = drop_data['Drop_Streak'].value_counts().sort_index()
+                
+                if 'Cumulative_Drop' in drop_data.columns:
+                    # Group by drop streak
+                    drop_magnitudes = drop_data.groupby('Drop_Streak')['Cumulative_Drop'].mean()
+                    
+                    # Display analysis
+                    st.markdown("""
+                    **Drop Event Characteristics**
+                    
+                    The model was trained on various types of market drops:
+                    """)
+                    
+                    # Create combined dataframe
+                    if not streak_counts.empty:
+                        streak_stats = pd.DataFrame({
+                            'Consecutive Drop Days': streak_counts.index,
+                            'Number of Events': streak_counts.values
+                        })
+                        
+                        # Add average magnitude
+                        streak_stats['Avg. Magnitude (%)'] = [
+                            drop_magnitudes.get(days, 0) for days in streak_stats['Consecutive Drop Days']
+                        ]
+                        
+                        # Display as table
+                        st.dataframe(streak_stats)
+                        
+                        # Create feature relationship charts
+                        if target_col in drop_data.columns:
+                            st.subheader("Feature Relationships with Returns")
+                            
+                            # Create relationship plots
+                            plot_cols = st.columns(2)
+                            
+                            with plot_cols[0]:
+                                # Relationship between drop streak and returns
+                                fig = px.box(
+                                    drop_data,
+                                    x='Drop_Streak',
+                                    y=target_col,
+                                    title=f"Returns by Consecutive Drop Days",
+                                    labels={
+                                        'Drop_Streak': 'Consecutive Drop Days',
+                                        target_col: f'{target_period} Return (%)'
+                                    }
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                            
+                            with plot_cols[1]:
+                                # Relationship between RSI and returns
+                                if 'RSI_14' in drop_data.columns:
+                                    fig = px.scatter(
+                                        drop_data,
+                                        x='RSI_14',
+                                        y=target_col,
+                                        title=f"Returns by RSI Level",
+                                        labels={
+                                            'RSI_14': 'RSI (14)',
+                                            target_col: f'{target_period} Return (%)'
+                                        },
+                                        trendline='ols'
+                                    )
+                                    st.plotly_chart(fig, use_container_width=True)
+    
     # Current market prediction
     st.markdown("#### Current Market Prediction")
     
-    # Prepare features for current data
-    current_data, features = prepare_features(st.session_state.data)
+    # Prepare features for current data - make sure to use same settings as the trained model
+    current_data, features = prepare_features(
+        st.session_state.data,
+        focus_on_drops=False  # Don't filter current data, just prepare features
+    )
     
     if current_data.empty:
         st.warning("Insufficient data to make predictions for current market conditions.")
