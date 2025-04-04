@@ -128,13 +128,13 @@ def show_historical_performance():
     agg_returns_df = agg_returns_df.set_index('Time Period')
     
     # Function to apply color formatting
-    def color_scale(val):
+    def color_scale(val, column_name):
         if pd.isna(val):
             return ''
         
         # For percentage columns
         if isinstance(val, (int, float)):
-            if 'Positive Outcomes' in val.name:
+            if 'Positive Outcomes' in column_name:
                 # Green scale for positive outcomes
                 color_val = min(1.0, max(0.0, val / 100))
                 return f'background-color: rgba(0, 128, 0, {color_val:.2f})'
@@ -148,8 +148,11 @@ def show_historical_performance():
                 return f'background-color: rgba(255, 0, 0, {color_val:.2f})'
         return ''
     
-    # Apply styling to the DataFrame
-    styled_df = agg_returns_df.style.format('{:.2f}').apply(lambda x: [color_scale(v) for v in x], axis=0)
+    # Apply styling to the DataFrame using applymap with axis=None
+    styled_df = agg_returns_df.style.format('{:.2f}').applymap(
+        lambda v, col_name=None: color_scale(v, col_name),
+        subset=None
+    )
     
     # Display the table
     st.table(styled_df)
@@ -205,16 +208,16 @@ def show_historical_performance():
     severity_returns_df = severity_returns_df.set_index('Severity')
     
     # Apply styling to the DataFrame
-    def color_severity_scale(val):
+    def color_severity_scale(val, column_name):
         if pd.isna(val):
             return ''
         
         # For count column
-        if 'Count' in val.name:
+        if 'Count' in column_name:
             return ''
         
         # For percentage columns with 'Positive' in name
-        if 'Positive' in val.name:
+        if 'Positive' in column_name:
             # Green scale for positive outcomes
             color_val = min(1.0, max(0.0, val / 100))
             return f'background-color: rgba(0, 128, 0, {color_val:.2f})'
@@ -230,7 +233,10 @@ def show_historical_performance():
             return f'background-color: rgba(255, 0, 0, {color_val:.2f})'
     
     # Apply styling to the DataFrame
-    styled_severity_df = severity_returns_df.style.format('{:.2f}').apply(lambda x: [color_severity_scale(v) for v in x], axis=0)
+    styled_severity_df = severity_returns_df.style.format('{:.2f}').applymap(
+        lambda v, col_name=None: color_severity_scale(v, col_name),
+        subset=None
+    )
     
     # Display the table
     st.table(styled_severity_df)
