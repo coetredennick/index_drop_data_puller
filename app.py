@@ -20,8 +20,7 @@ from pages.ml_predictions import show_ml_predictions
 st.set_page_config(
     page_title="S&P 500 Market Drop Analyzer",
     page_icon="📉",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
 # Add some CSS to make it look like a professional financial dashboard
@@ -83,27 +82,32 @@ if 'consecutive_drop_events' not in st.session_state:
 if 'selected_event' not in st.session_state:
     st.session_state.selected_event = None
 
-# Sidebar for settings
-with st.sidebar:
-    st.header("Analysis Settings")
-    
-    # Date Range Selection
-    st.subheader("Data Range")
+# Main page settings
+# Create a container for the analysis settings
+st.markdown("### Analysis Settings")
+
+# Use columns to organize the settings in a more compact horizontal layout
+col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+
+# Date Range Selection in the first column
+with col1:
     start_date = st.date_input(
         "Start Date",
         value=pd.to_datetime(st.session_state.date_range[0]),
         min_value=pd.to_datetime('1950-01-01'),
         max_value=datetime.today() - timedelta(days=1)
     )
+
+with col2:
     end_date = st.date_input(
         "End Date",
         value=pd.to_datetime(st.session_state.date_range[1]),
         min_value=pd.to_datetime('1950-01-01'),
         max_value=datetime.today()
     )
-    
-    # Drop Events Detection Settings
-    st.subheader("Drop Event Detection")
+
+# Drop Events Detection Settings in the third column
+with col3:
     drop_threshold = st.slider(
         "Drop Threshold (%)",
         min_value=0.1,
@@ -118,7 +122,9 @@ with st.sidebar:
         value=st.session_state.consecutive_days > 1,
         help="Detect sequences of consecutive days where each day fell by more than the threshold"
     )
-    
+
+# Fourth column for consecutive days and apply button
+with col4:
     consecutive_days = 1
     if use_consecutive:
         consecutive_days = st.slider(
@@ -131,7 +137,7 @@ with st.sidebar:
         )
     
     # Apply button
-    if st.button("Apply Settings"):
+    if st.button("Apply Settings", key="apply_settings"):
         # Update session state
         st.session_state.drop_threshold = drop_threshold
         st.session_state.consecutive_days = consecutive_days if use_consecutive else 1
@@ -143,15 +149,13 @@ with st.sidebar:
         # Show info message
         st.info("Settings applied! Data will be refreshed.")
         st.rerun()
-    
-    st.markdown("---")
-    st.markdown("### About")
-    st.markdown("""
-    This tool analyzes S&P 500 market drops to help understand patterns
-    and recovery trajectories after significant market corrections.
-    
-    Data source: Yahoo Finance (^GSPC)
-    """)
+
+# Data source info
+st.markdown("""
+<div style="text-align: right; font-size: 0.8em; color: gray;">
+Data source: Yahoo Finance (^GSPC)
+</div>
+""", unsafe_allow_html=True)
 
 # Main content
 # Fetch and process data
