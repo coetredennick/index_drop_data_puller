@@ -33,6 +33,18 @@ st.markdown("""
     .sidebar .sidebar-content {
         background-color: #f8f9fa;
     }
+    
+    /* Hide the default Streamlit navigation sidebar */
+    section[data-testid="stSidebar"] {
+        display: none !important;
+    }
+    
+    /* Hide the hamburger menu that shows the navigation sidebar */
+    button[kind="header"] {
+        display: none !important;
+    }
+    
+    /* Tab styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 1px;
     }
