@@ -198,7 +198,7 @@ def show_drop_events():
             # Function to apply color formatting
             def color_negative_red(val):
                 if isinstance(val, (int, float)):
-                    if val < 0:
+                    if 'Change' in val.name and val < 0:
                         return 'color: red'
                 return ''
             
