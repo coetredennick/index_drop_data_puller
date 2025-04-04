@@ -213,10 +213,10 @@ def show_drop_events():
                 'Volume vs Avg': '{:.1f}x'
             })
             
-            # Add custom CSS for smaller font and better spacing
+            # Add custom CSS for smaller font and more compact layout
             styled_price_data = styled_price_data.set_table_styles([
-                {'selector': 'td', 'props': [('font-size', '12px'), ('padding', '4px 8px')]},
-                {'selector': 'th', 'props': [('font-size', '12px'), ('padding', '4px 8px')]}
+                {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]},
+                {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]}
             ])
             
             # Apply color formatting using map (replacing deprecated applymap)

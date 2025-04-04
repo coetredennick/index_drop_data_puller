@@ -93,14 +93,14 @@ def show_historical_performance():
     # Create a DataFrame for aggregate returns
     time_periods = ['1W', '1M', '3M', '6M', '1Y', '3Y']
     
-    # Initialize dict to store results
+    # Initialize dict to store results with shorter column names
     agg_returns = {
-        'Time Period': time_periods,
-        'Average Return (%)': [],
-        'Median Return (%)': [],
-        'Minimum Return (%)': [],
-        'Maximum Return (%)': [],
-        'Positive Outcomes (%)': []
+        'Period': time_periods,
+        'Avg (%)': [],
+        'Med (%)': [],
+        'Min (%)': [],
+        'Max (%)': [],
+        'Pos (%)': []
     }
     
     for period in time_periods:
@@ -108,24 +108,24 @@ def show_historical_performance():
         period_returns = [event[period_key] for event in all_events if period_key in event and not pd.isna(event[period_key])]
         
         if period_returns:
-            agg_returns['Average Return (%)'].append(np.mean(period_returns))
-            agg_returns['Median Return (%)'].append(np.median(period_returns))
-            agg_returns['Minimum Return (%)'].append(min(period_returns))
-            agg_returns['Maximum Return (%)'].append(max(period_returns))
+            agg_returns['Avg (%)'].append(np.mean(period_returns))
+            agg_returns['Med (%)'].append(np.median(period_returns))
+            agg_returns['Min (%)'].append(min(period_returns))
+            agg_returns['Max (%)'].append(max(period_returns))
             positive_pct = sum(1 for r in period_returns if r > 0) / len(period_returns) * 100
-            agg_returns['Positive Outcomes (%)'].append(positive_pct)
+            agg_returns['Pos (%)'].append(positive_pct)
         else:
-            agg_returns['Average Return (%)'].append(None)
-            agg_returns['Median Return (%)'].append(None)
-            agg_returns['Minimum Return (%)'].append(None)
-            agg_returns['Maximum Return (%)'].append(None)
-            agg_returns['Positive Outcomes (%)'].append(None)
+            agg_returns['Avg (%)'].append(None)
+            agg_returns['Med (%)'].append(None)
+            agg_returns['Min (%)'].append(None)
+            agg_returns['Max (%)'].append(None)
+            agg_returns['Pos (%)'].append(None)
     
     # Create DataFrame and display
     agg_returns_df = pd.DataFrame(agg_returns)
     
     # Convert to a more readable format with time periods as index
-    agg_returns_df = agg_returns_df.set_index('Time Period')
+    agg_returns_df = agg_returns_df.set_index('Period')
     
     # Function to apply color formatting
     def color_scale(val):
@@ -148,15 +148,15 @@ def show_historical_performance():
     format_dict = {col: '{:.1f}%' for col in agg_returns_df.columns}
     styled_df = agg_returns_df.style.format(format_dict)
     
-    # Add custom CSS for smaller font
+    # Add custom CSS for smaller font and compact layout
     styled_df = styled_df.set_table_styles([
-        {'selector': 'td', 'props': [('font-size', '12px'), ('padding', '5px 10px')]},
-        {'selector': 'th', 'props': [('font-size', '12px'), ('padding', '5px 10px')]}
+        {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '3px 5px'), ('white-space', 'nowrap')]},
+        {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '3px 5px'), ('white-space', 'nowrap')]}
     ])
     
     # Apply color formatting to each column
     for col in agg_returns_df.columns:
-        if "Positive Outcomes" in col:
+        if "Pos" in col:  # Matches "Pos (%)" column
             # Special coloring for positive outcomes column
             # Use map instead of deprecated applymap
             styled_df = styled_df.map(
@@ -187,10 +187,10 @@ def show_historical_performance():
         'Count': []
     }
     
-    # Add columns for each time period
+    # Add columns for each time period with shorter names for better fit
     for period in time_periods:
-        severity_returns[f'{period} Avg Return (%)'] = []
-        severity_returns[f'{period} Positive (%)'] = []
+        severity_returns[f'{period} Ret (%)'] = []  # Short for "Average Return"
+        severity_returns[f'{period} Pos (%)'] = []  # Short for "Positive Outcomes"
     
     # Calculate metrics for each severity group
     severity_order = ['Severe', 'Major', 'Significant', 'Minor']
@@ -208,11 +208,11 @@ def show_historical_performance():
                     avg_return = np.mean(period_returns)
                     positive_pct = sum(1 for r in period_returns if r > 0) / len(period_returns) * 100
                     
-                    severity_returns[f'{period} Avg Return (%)'].append(avg_return)
-                    severity_returns[f'{period} Positive (%)'].append(positive_pct)
+                    severity_returns[f'{period} Ret (%)'].append(avg_return)
+                    severity_returns[f'{period} Pos (%)'].append(positive_pct)
                 else:
-                    severity_returns[f'{period} Avg Return (%)'].append(None)
-                    severity_returns[f'{period} Positive (%)'].append(None)
+                    severity_returns[f'{period} Ret (%)'].append(None)
+                    severity_returns[f'{period} Pos (%)'].append(None)
     
     # Create DataFrame and display
     severity_returns_df = pd.DataFrame(severity_returns)
@@ -247,10 +247,10 @@ def show_historical_performance():
     
     styled_severity_df = severity_returns_df.style.format(format_dict)
     
-    # Add custom CSS for smaller font
+    # Add custom CSS for smaller font and compact layout
     styled_severity_df = styled_severity_df.set_table_styles([
-        {'selector': 'td', 'props': [('font-size', '12px'), ('padding', '5px 10px')]},
-        {'selector': 'th', 'props': [('font-size', '12px'), ('padding', '5px 10px')]}
+        {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '3px 5px'), ('white-space', 'nowrap')]},
+        {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '3px 5px'), ('white-space', 'nowrap')]}
     ])
     
     # Apply color formatting to each column
@@ -258,7 +258,7 @@ def show_historical_performance():
         if col == 'Count':
             # No coloring for Count column
             continue
-        elif 'Positive' in col:
+        elif 'Pos' in col:  # Matches "Pos (%)" columns
             # Special coloring for positive percentage columns
             # Use map instead of deprecated applymap
             styled_severity_df = styled_severity_df.map(
@@ -282,12 +282,12 @@ def show_historical_performance():
             'Type': 'Single Day' if event['type'] == 'single_day' else f'Consecutive ({event["num_days"]} days)',
             'Drop (%)': event['drop_pct'] if event['type'] == 'single_day' else event['cumulative_drop'],
             'Severity': event['severity'],
-            '1W Return (%)': event.get('fwd_return_1w', None),
-            '1M Return (%)': event.get('fwd_return_1m', None),
-            '3M Return (%)': event.get('fwd_return_3m', None),
-            '6M Return (%)': event.get('fwd_return_6m', None),
-            '1Y Return (%)': event.get('fwd_return_1y', None),
-            '3Y Return (%)': event.get('fwd_return_3y', None)
+            '1W (%)': event.get('fwd_return_1w', None),
+            '1M (%)': event.get('fwd_return_1m', None),
+            '3M (%)': event.get('fwd_return_3m', None),
+            '6M (%)': event.get('fwd_return_6m', None),
+            '1Y (%)': event.get('fwd_return_1y', None),
+            '3Y (%)': event.get('fwd_return_3y', None)
         }
         for event in all_events
     ])
@@ -331,10 +331,10 @@ def show_historical_performance():
     # Apply styling with formatting and smaller text using map (replaces deprecated applymap)
     styled_events_df = events_df.style.map(color_cell).format(format_dict)
     
-    # Add custom CSS for smaller font
+    # Add custom CSS for smaller font and more compact layout
     styled_events_df = styled_events_df.set_table_styles([
-        {'selector': 'td', 'props': [('font-size', '11px'), ('padding', '3px 8px')]},
-        {'selector': 'th', 'props': [('font-size', '11px'), ('padding', '3px 8px')]}
+        {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]},
+        {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]}
     ])
     
     # Display the table
