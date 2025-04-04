@@ -23,15 +23,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# Add some CSS to make it look like a professional financial dashboard
+# Add CSS for clean, modern financial dashboard design
 st.markdown("""
 <style>
+    /* Main container styling */
     .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        max-width: 1200px;
     }
-    .sidebar .sidebar-content {
-        background-color: #f8f9fa;
+    
+    /* Overall font styling */
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
     /* Hide the default Streamlit navigation sidebar */
@@ -44,41 +48,112 @@ st.markdown("""
         display: none !important;
     }
     
-    /* Tab styling */
+    /* Main header styling */
+    h1 {
+        color: #0D2535;
+        font-weight: 600;
+        font-size: 28px;
+        margin-bottom: 0.2em;
+    }
+    
+    h2, h3, h4 {
+        color: #0D2535;
+        font-weight: 500;
+    }
+    
+    h3 {
+        font-size: 1.1em;
+        margin-top: 1em;
+        margin-bottom: 0.5em;
+        padding-bottom: 0.2em;
+        border-bottom: 1px solid #f0f2f6;
+    }
+
+    /* Tab styling for clean navigation */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
+        gap: 5px;
         background-color: #f8f9fa;
-        border-radius: 4px 4px 0 0;
-        padding-top: 10px;
-        padding-bottom: 10px;
-        padding-left: 20px;
-        padding-right: 20px;
-        margin-right: 5px;
+        border-radius: 5px;
+        padding: 5px 5px 0 5px;
     }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        white-space: pre-wrap;
+        background-color: #f0f2f6;
+        border-radius: 5px 5px 0 0;
+        padding: 10px 15px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #0D2535;
+        border: none;
+    }
+    
     .stTabs [aria-selected="true"] {
         background-color: white;
-        border-bottom: 2px solid #0E6EFD;
+        border-bottom: 2px solid #1E88E5;
+        color: #1E88E5;
     }
-    .css-1y4p8pa {
-        max-width: 1200px;
+    
+    /* Button styling */
+    .stButton > button {
+        background-color: #1E88E5;
+        color: white;
+        border-radius: 4px;
+        border: none;
+        padding: 0.3rem 1rem;
+        font-weight: 500;
     }
+    
+    .stButton > button:hover {
+        background-color: #1976D2;
+    }
+    
+    /* Tables & Metrics styling */
+    [data-testid="stMetricValue"] {
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+    
+    [data-testid="stMetricDelta"] {
+        font-size: 0.8rem;
+    }
+    
+    /* Settings container styling */
+    div[data-testid="stExpander"] {
+        border: 1px solid #f0f2f6;
+        border-radius: 5px;
+        margin-bottom: 1rem;
+    }
+
+    /* Reduce whitespace */
     div[data-testid="stVerticalBlock"] > div:nth-child(1) {
-        margin-bottom: 0rem;
+        margin-bottom: 0;
+    }
+    
+    /* Slider refinements */
+    div[data-testid="stSlider"] {
+        padding-top: 0.5rem;
+        padding-bottom: 1rem;
+    }
+    
+    /* Make plotly charts responsive */
+    iframe {
+        width: 100%;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Title
-st.title("S&P 500 Market Drop Analyzer")
+# Cleaner title and description layout
 st.markdown("""
-This dashboard provides comprehensive analysis of significant market corrections in the S&P 500 index.
-It combines historical data analysis, technical indicators, interactive visualizations, and machine learning
-to help understand market behavior during and after significant drop events.
-""")
+<div style="text-align: center; padding: 1rem 0; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 1rem;">
+    <h1 style="margin: 0; padding: 0; color: #1E4A7B;">S&P 500 Market Drop Analyzer</h1>
+    <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #5A6570;">
+        A data-driven tool for analyzing market corrections and forecasting recovery patterns
+    </p>
+</div>
+"""
+, unsafe_allow_html=True)
 
 # Initialize session state for settings
 if 'drop_threshold' not in st.session_state:
@@ -96,78 +171,87 @@ if 'consecutive_drop_events' not in st.session_state:
 if 'selected_event' not in st.session_state:
     st.session_state.selected_event = None
 
-# Main page settings
-# Create a container for the analysis settings
-st.markdown("### Analysis Settings")
-
-# Use columns to organize the settings in a more compact horizontal layout
-col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-
-# Date Range Selection in the first column
-with col1:
-    start_date = st.date_input(
-        "Start Date",
-        value=pd.to_datetime(st.session_state.date_range[0]),
-        min_value=pd.to_datetime('1950-01-01'),
-        max_value=datetime.today() - timedelta(days=1)
-    )
-
-with col2:
-    end_date = st.date_input(
-        "End Date",
-        value=pd.to_datetime(st.session_state.date_range[1]),
-        min_value=pd.to_datetime('1950-01-01'),
-        max_value=datetime.today()
-    )
-
-# Drop Events Detection Settings in the third column
-with col3:
-    drop_threshold = st.slider(
-        "Drop Threshold (%)",
-        min_value=0.1,
-        max_value=20.0,
-        value=st.session_state.drop_threshold,
-        step=0.1,
-        help="Minimum percentage drop to be considered as a significant market event"
-    )
+# Main page settings in a clean, collapsible container
+with st.expander("📊 Analysis Settings", expanded=False):
+    # Use two columns for a cleaner layout - left for dates, right for thresholds
+    col1, col2 = st.columns([1, 1])
     
-    use_consecutive = st.checkbox(
-        "Detect Consecutive Day Drops",
-        value=st.session_state.consecutive_days > 1,
-        help="Detect sequences of consecutive days where each day fell by more than the threshold"
-    )
-
-# Fourth column for consecutive days and apply button
-with col4:
-    consecutive_days = 1
-    if use_consecutive:
-        consecutive_days = st.slider(
-            "Number of Consecutive Days",
-            min_value=2,
-            max_value=5,
-            value=max(2, st.session_state.consecutive_days),
-            step=1,
-            help="Number of consecutive days each with drops exceeding the threshold"
+    with col1:
+        st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Date Range</h4>", unsafe_allow_html=True)
+        date_col1, date_col2 = st.columns(2)
+        
+        with date_col1:
+            start_date = st.date_input(
+                "Start Date",
+                value=pd.to_datetime(st.session_state.date_range[0]),
+                min_value=pd.to_datetime('1950-01-01'),
+                max_value=datetime.today() - timedelta(days=1),
+                key="start_date"
+            )
+        
+        with date_col2:
+            end_date = st.date_input(
+                "End Date",
+                value=pd.to_datetime(st.session_state.date_range[1]),
+                min_value=pd.to_datetime('1950-01-01'),
+                max_value=datetime.today(),
+                key="end_date"
+            )
+    
+    with col2:
+        st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Drop Event Detection</h4>", unsafe_allow_html=True)
+        
+        drop_threshold = st.slider(
+            "Drop Threshold (%)",
+            min_value=0.1,
+            max_value=20.0,
+            value=st.session_state.drop_threshold,
+            step=0.1,
+            help="Minimum percentage drop to be considered as a significant market event"
         )
+        
+        detection_col1, detection_col2 = st.columns([3, 2])
+        
+        with detection_col1:
+            use_consecutive = st.checkbox(
+                "Detect Consecutive Drops",
+                value=st.session_state.consecutive_days > 1,
+                help="Detect sequences of consecutive days where each day fell by more than the threshold"
+            )
+        
+        with detection_col2:
+            consecutive_days = 1
+            if use_consecutive:
+                consecutive_days = st.number_input(
+                    "Days",
+                    min_value=2,
+                    max_value=5,
+                    value=max(2, st.session_state.consecutive_days),
+                    help="Number of consecutive days each with drops exceeding the threshold"
+                )
     
-    # Apply button
-    if st.button("Apply Settings", key="apply_settings"):
-        # Update session state
-        st.session_state.drop_threshold = drop_threshold
-        st.session_state.consecutive_days = consecutive_days if use_consecutive else 1
-        st.session_state.date_range = (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
-        
-        # Reset selected event when settings change
-        st.session_state.selected_event = None
-        
-        # Show info message
-        st.info("Settings applied! Data will be refreshed.")
-        st.rerun()
+    # Centered apply button with improved styling
+    _, btn_col, _ = st.columns([1, 2, 1])
+    with btn_col:
+        if st.button("Apply Settings", key="apply_settings", use_container_width=True):
+            # Update session state
+            st.session_state.drop_threshold = drop_threshold
+            st.session_state.consecutive_days = consecutive_days if use_consecutive else 1
+            st.session_state.date_range = (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+            
+            # Reset selected event when settings change
+            st.session_state.selected_event = None
+            
+            # Show info message
+            st.success("✅ Settings applied! Data will be refreshed.")
+            st.rerun()
 
-# Data source info
+# Data source info with improved styling
 st.markdown("""
-<div style="text-align: right; font-size: 0.8em; color: gray;">
-Data source: Yahoo Finance (^GSPC)
+<div style="text-align: right; font-size: 0.8em; color: #5A6570; margin-top: -0.5rem; margin-bottom: 0.7rem;">
+    <span style="background-color: #f0f2f6; padding: 0.2rem 0.5rem; border-radius: 3px;">
+        <i>Data source: Yahoo Finance (^GSPC)</i>
+    </span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -207,13 +291,16 @@ with st.spinner("Fetching S&P 500 data..."):
         else:
             st.error("Failed to fetch S&P 500 data. Please check your internet connection and try again.")
 
-# Create tabs for different sections
+# Create tabs with icons for better visual organization
 tabs = st.tabs([
-    "Historical Performance", 
-    "Drop Events Analysis", 
-    "Current Market Conditions", 
-    "ML Predictions"
+    "📈 Historical Performance", 
+    "🔍 Drop Events Analysis", 
+    "📊 Current Market", 
+    "🤖 ML Predictions"
 ])
+
+# Add a light separator before tabs content
+st.markdown('<hr style="margin-top: 0; margin-bottom: 15px; border: none; height: 1px; background-color: #f0f2f6;">', unsafe_allow_html=True)
 
 # Populate tabs with content
 with tabs[0]:
@@ -227,3 +314,12 @@ with tabs[2]:
 
 with tabs[3]:
     show_ml_predictions()
+
+# Add footer
+st.markdown("""
+<div style="margin-top: 30px; text-align: center; padding: 10px; font-size: 0.8em; color: #6c757d; border-top: 1px solid #f0f2f6;">
+    <p style="margin: 5px 0;">
+        S&P 500 Market Drop Analyzer - A comprehensive tool for analyzing market correction patterns
+    </p>
+</div>
+""", unsafe_allow_html=True)

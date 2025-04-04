@@ -2,12 +2,15 @@
 headless = true
 address = "0.0.0.0"
 port = 5000
+enableCORS = false
+enableXsrfProtection = false
 
-[ui]
-hideSidebarNav = true
+[browser]
+gatherUsageStats = false
+serverAddress = "localhost"
 
 [theme]
-primaryColor = "#0E6EFD"
+primaryColor = "#1E4A7B"
 backgroundColor = "#F8F9FA"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#262730"

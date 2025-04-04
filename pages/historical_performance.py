@@ -17,6 +17,46 @@ def show_historical_performance():
     Display the Historical Performance tab with aggregate return analysis,
     event distribution, and detailed return database
     """
+    
+    # Add some custom CSS for this page's elements
+    st.markdown("""
+    <style>
+        /* Card styling for sections */
+        div.stMarkdown h3 {
+            background-color: #f8f9fa;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            color: #1E4A7B;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        /* Improve table readability */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        th {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        /* Plot margins */
+        .stPlotlyChart {
+            margin-bottom: 1rem;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     # Check if data and events are available
     if not st.session_state.data is not None or st.session_state.data.empty:
         st.warning("No data available. Please adjust the date range and fetch data.")

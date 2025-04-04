@@ -18,6 +18,85 @@ def show_current_market():
     """
     Display the Current Market Conditions tab with real-time S&P 500 analysis
     """
+    
+    # Add custom styling for the current market page
+    st.markdown("""
+    <style>
+        /* Card styling for sections */
+        div.stMarkdown h3 {
+            background-color: #f8f9fa;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            color: #1E4A7B;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        /* Dashboard card style */
+        .dashboard-card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        /* Metric styling */
+        div[data-testid="stMetric"] {
+            background-color: white;
+            padding: 0.7rem;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Metric label styling */
+        div[data-testid="stMetricLabel"] {
+            font-size: 0.8rem !important;
+            font-weight: 500 !important;
+        }
+        
+        /* Improve plot styling */
+        .stPlotlyChart {
+            margin-bottom: 1rem;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1rem;
+        }
+        
+        /* Indicator card styling */
+        .indicator-card {
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 0.8rem;
+            margin-bottom: 0.8rem;
+            background-color: white;
+        }
+        
+        /* Indicator title */
+        .indicator-title {
+            font-weight: 500;
+            font-size: 0.9rem;
+            margin-bottom: 0.3rem;
+            color: #1E4A7B;
+        }
+        
+        /* Indicator value */
+        .indicator-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        /* Indicator description */
+        .indicator-desc {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 0.3rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     st.markdown("### Current S&P 500 Market Conditions")
     
     # Fetch the latest data

@@ -17,6 +17,68 @@ def show_drop_events():
     """
     Display the Drop Events Analysis tab with individual event analysis
     """
+    
+    # Add custom styling for this page
+    st.markdown("""
+    <style>
+        /* Card styling for sections */
+        div.stMarkdown h3 {
+            background-color: #f8f9fa;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            color: #1E4A7B;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        /* Style for technical indicators */
+        div[data-testid="stVerticalBlock"] > div > div[data-testid="stVerticalBlock"] {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+        
+        /* Style for tab content */
+        div[data-testid="stTabContent"] {
+            background-color: white;
+            border-radius: 0 5px 5px 5px;
+            padding: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #f8f9fa;
+        }
+        
+        /* Improve plot styling */
+        .stPlotlyChart {
+            margin-bottom: 1rem;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1rem;
+        }
+        
+        /* Selectbox styling */
+        div[data-testid="stSelectbox"] label {
+            font-weight: 500;
+            color: #1E4A7B;
+        }
+        
+        /* Metric styling */
+        div[data-testid="stMetric"] {
+            background-color: white;
+            padding: 0.7rem;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Card styling for technical indicators */
+        div[data-baseweb="tab-panel"] {
+            padding: 0.5rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     # Check if data and events are available
     if not st.session_state.data is not None or st.session_state.data.empty:
         st.warning("No data available. Please adjust the date range and fetch data.")

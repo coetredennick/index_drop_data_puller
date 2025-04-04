@@ -23,6 +23,93 @@ def show_ml_predictions():
     Display the Machine Learning Predictions tab with model training,
     performance analysis, and predictions for current market conditions
     """
+    
+    # Add custom styling for the ML Predictions page
+    st.markdown("""
+    <style>
+        /* Card styling for sections */
+        div.stMarkdown h3 {
+            background-color: #f8f9fa;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            color: #1E4A7B;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        /* Improve plot styling */
+        .stPlotlyChart {
+            margin-bottom: 1rem;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1rem;
+        }
+        
+        /* Style for selectbox */
+        div[data-testid="stSelectbox"] label {
+            font-weight: 500;
+            color: #1E4A7B;
+        }
+        
+        /* Metric styling */
+        div[data-testid="stMetric"] {
+            background-color: white;
+            padding: 0.7rem;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Model metrics card */
+        .metrics-card {
+            background-color: white;
+            border-radius: 5px;
+            padding: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+        
+        /* Prediction card */
+        .prediction-card {
+            text-align: center;
+            background-color: white;
+            border-radius: 5px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Prediction value */
+        .prediction-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+        }
+        
+        /* Prediction label */
+        .prediction-label {
+            font-size: 1rem;
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Feature table */
+        .feature-table {
+            font-size: 0.9rem;
+        }
+        
+        /* Model info */
+        .model-info {
+            font-size: 0.8rem;
+            color: #6c757d;
+            font-style: italic;
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     st.markdown("### Machine Learning Predictions")
     
     # Check if data is available
