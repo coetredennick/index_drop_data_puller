@@ -395,6 +395,53 @@ def show_ml_predictions():
         st.error(f"Model error: {model_result.get('error', 'Unknown error')}")
         return
     
+    # Add S&P 500 Price Forecast
+    st.markdown("### S&P 500 Price Forecast")
+    
+    from utils.ml_models import create_forecast_chart
+    
+    # Create forecast chart
+    forecast_days_options = {
+        "7 Days": 7,
+        "14 Days": 14,
+        "30 Days": 30,
+        "60 Days": 60,
+        "90 Days": 90
+    }
+    
+    forecast_col1, forecast_col2 = st.columns([4, 1])
+    
+    with forecast_col2:
+        st.markdown("<br>", unsafe_allow_html=True)  # Add some space
+        forecast_days = st.selectbox(
+            "Forecast Period",
+            list(forecast_days_options.keys()),
+            index=2  # Default to 30 days
+        )
+        days_to_forecast = forecast_days_options[forecast_days]
+    
+    with forecast_col1:
+        forecast_chart = create_forecast_chart(
+            model_result,
+            st.session_state.data,
+            features,
+            days_to_forecast=days_to_forecast,
+            title=f"S&P 500 {forecast_days} Price Forecast (Machine Learning Prediction)"
+        )
+        st.plotly_chart(forecast_chart, use_container_width=True)
+    
+    # Add description of forecast
+    st.markdown("""
+    **About this forecast:**
+    
+    This machine learning forecast is based on the trained model's predictions of future returns. 
+    The forecast shows the expected price trajectory with a confidence interval (shaded area) 
+    derived from the model's prediction error. This is for educational purposes only and should not 
+    be used as financial advice.
+    """)
+    
+    st.markdown("---")
+    
     # Model performance metrics
     st.markdown("#### Model Performance")
     

@@ -384,6 +384,201 @@ def create_prediction_chart(model_result, title="Model Predictions vs Actual Ret
     
     return fig
 
+def create_forecast_chart(model_result, data, features, days_to_forecast=30, title="S&P 500 Forecast", height=500):
+    """
+    Create a chart showing the forecasted S&P 500 price based on the trained model
+    
+    Parameters:
+    -----------
+    model_result : dict
+        Dictionary containing the trained model and performance metrics
+    data : pandas.DataFrame
+        DataFrame containing historical S&P 500 data
+    features : list
+        List of feature column names used for prediction
+    days_to_forecast : int, optional
+        Number of days to forecast into the future
+    title : str, optional
+        Chart title
+    height : int, optional
+        Chart height in pixels
+        
+    Returns:
+    --------
+    plotly.graph_objects.Figure
+        Forecast chart
+    """
+    if not model_result['success']:
+        # No model available
+        fig = go.Figure()
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                text="No model available for forecasting",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False
+            )],
+            height=height
+        )
+        return fig
+    
+    # Get the last available data point
+    last_date = data.index[-1]
+    last_price = data['Close'].iloc[-1]
+    
+    # Create a date range for the forecast period
+    forecast_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=days_to_forecast)
+    
+    # Use the model to make predictions for each forecast day
+    forecast_prices = []
+    current_data = data.copy()
+    
+    for i in range(days_to_forecast):
+        # Ensure we have all required features for prediction
+        if all(feature in current_data.columns for feature in features):
+            # Get prediction for the next day's return
+            pred_return = predict_returns(model_result, current_data, features)
+            
+            if pred_return is not None:
+                # Calculate predicted price based on return
+                if i == 0:
+                    # First prediction based on last actual price
+                    pred_price = last_price * (1 + pred_return/100)
+                else:
+                    # Subsequent predictions based on previous prediction
+                    pred_price = forecast_prices[-1] * (1 + pred_return/100)
+                
+                forecast_prices.append(pred_price)
+                
+                # Add this prediction to the data for the next iteration
+                # Create a new row for the forecasted day
+                new_row = pd.DataFrame({
+                    'Open': pred_price,
+                    'High': pred_price * 1.005,  # Approximate
+                    'Low': pred_price * 0.995,   # Approximate
+                    'Close': pred_price,
+                    'Volume': current_data['Volume'].mean(),  # Use mean volume
+                    'Return': pred_return
+                }, index=[forecast_dates[i]])
+                
+                # Add technical indicators to new row (simplified)
+                if 'RSI_14' in current_data.columns:
+                    new_row['RSI_14'] = current_data['RSI_14'].iloc[-1]
+                if 'MACD_12_26_9' in current_data.columns:
+                    new_row['MACD_12_26_9'] = current_data['MACD_12_26_9'].iloc[-1]
+                
+                # Append to the data
+                current_data = pd.concat([current_data, new_row])
+            else:
+                # If prediction fails, use last price
+                forecast_prices.append(forecast_prices[-1] if forecast_prices else last_price)
+        else:
+            # Missing features, use last price
+            forecast_prices.append(forecast_prices[-1] if forecast_prices else last_price)
+    
+    # Create the figure
+    fig = go.Figure()
+    
+    # Add historical data (last 60 days)
+    historical_data = data.iloc[-60:]
+    fig.add_trace(
+        go.Scatter(
+            x=historical_data.index,
+            y=historical_data['Close'],
+            mode='lines',
+            name='Historical',
+            line=dict(color='rgba(0, 0, 255, 0.8)', width=2)
+        )
+    )
+    
+    # Add forecast
+    fig.add_trace(
+        go.Scatter(
+            x=forecast_dates,
+            y=forecast_prices,
+            mode='lines',
+            name='Forecast',
+            line=dict(color='rgba(255, 0, 0, 0.8)', width=2, dash='dash')
+        )
+    )
+    
+    # Calculate confidence interval (using model's RMSE)
+    rmse = model_result['metrics']['rmse_test']
+    upper_bound = [price * (1 + rmse/100) for price in forecast_prices]
+    lower_bound = [price * (1 - rmse/100) for price in forecast_prices]
+    
+    # Add confidence interval
+    fig.add_trace(
+        go.Scatter(
+            x=forecast_dates,
+            y=upper_bound,
+            mode='lines',
+            line=dict(width=0),
+            showlegend=False,
+            name='Upper Bound'
+        )
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=forecast_dates,
+            y=lower_bound,
+            mode='lines',
+            line=dict(width=0),
+            fill='tonexty',
+            fillcolor='rgba(255, 0, 0, 0.2)',
+            showlegend=False,
+            name='Lower Bound'
+        )
+    )
+    
+    # Add a marker for the last actual price
+    fig.add_trace(
+        go.Scatter(
+            x=[last_date],
+            y=[last_price],
+            mode='markers',
+            marker=dict(color='black', size=8, symbol='circle'),
+            name='Latest Price'
+        )
+    )
+    
+    # Format the layout
+    fig.update_layout(
+        title=title,
+        xaxis_title="Date",
+        yaxis_title="S&P 500 Price ($)",
+        height=height,
+        template="plotly_white",
+        hovermode="x unified",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        margin=dict(l=40, r=40, t=50, b=40),
+    )
+    
+    # Add range slider
+    fig.update_xaxes(
+        rangeslider_visible=True,
+        rangeselector=dict(
+            buttons=list([
+                dict(count=7, label="1w", step="day", stepmode="backward"),
+                dict(count=1, label="1m", step="month", stepmode="backward"),
+                dict(count=3, label="3m", step="month", stepmode="backward"),
+                dict(step="all")
+            ])
+        )
+    )
+    
+    return fig
+
 def create_feature_importance_chart(model_result, title="Feature Importance", height=400):
     """
     Create a chart showing feature importance from the model

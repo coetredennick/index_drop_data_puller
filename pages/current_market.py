@@ -16,7 +16,7 @@ from utils.visualizations import create_price_chart
 
 def show_current_market():
     """
-    Display the Current Market Conditions tab with real-time S&P 500 analysis
+    Display the Current Market Conditions tab with real-time S&P 500 analysis and forecasting
     """
     
     # Add custom styling for the current market page
@@ -411,6 +411,176 @@ def show_current_market():
             )
         else:
             st.metric("30-Day Maximum Drawdown", "N/A")
+    
+    # Simple Price Forecast
+    st.markdown("### S&P 500 Price Forecast")
+    
+    # Create a simple forecasting model based on moving averages and recent trend
+    if len(current_data) >= 30:
+        # Define different forecasting methods
+        forecasting_method = st.selectbox(
+            "Forecasting Method",
+            ["Moving Average Trend", "Recent Momentum", "Linear Regression"],
+            index=0
+        )
+        
+        # Number of days to forecast
+        days_to_forecast = st.slider("Days to Forecast", min_value=7, max_value=90, value=30, step=7)
+        
+        # Last actual price
+        last_date = current_data.index[-1]
+        last_price = current_data['Close'].iloc[-1]
+        
+        # Generate forecast dates
+        forecast_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=days_to_forecast)
+        
+        # Moving Average Trend method
+        if forecasting_method == "Moving Average Trend":
+            # Use the ratio between short and long term moving averages to project future prices
+            # Calculate short and long moving averages
+            short_ma_days = 10
+            long_ma_days = 30
+            
+            if len(current_data) > long_ma_days:
+                short_ma = current_data['Close'].rolling(window=short_ma_days).mean().iloc[-1]
+                long_ma = current_data['Close'].rolling(window=long_ma_days).mean().iloc[-1]
+                
+                # Calculate daily growth rate based on MA ratio
+                ma_ratio = short_ma / long_ma
+                daily_growth = (ma_ratio - 1) * 5 / long_ma_days  # Scale to appropriate daily change
+                
+                # Generate forecast prices with momentum decay
+                forecast_prices = []
+                for i in range(days_to_forecast):
+                    if i == 0:
+                        next_price = last_price * (1 + daily_growth)
+                    else:
+                        # Momentum decays over time
+                        decay_factor = max(0.1, 1 - (i / days_to_forecast))
+                        next_price = forecast_prices[-1] * (1 + daily_growth * decay_factor)
+                    forecast_prices.append(next_price)
+            else:
+                st.warning("Not enough historical data for Moving Average Trend forecast.")
+                return
+        
+        # Recent Momentum method
+        elif forecasting_method == "Recent Momentum":
+            # Calculate recent momentum (average daily return)
+            recent_days = 5
+            recent_returns = current_data['Return'].iloc[-recent_days:]
+            avg_daily_return = recent_returns.mean()
+            
+            # Generate forecast with momentum decay
+            forecast_prices = []
+            for i in range(days_to_forecast):
+                if i == 0:
+                    next_price = last_price * (1 + avg_daily_return/100)
+                else:
+                    # Momentum decays over time
+                    decay_factor = max(0.1, 1 - (i / days_to_forecast))
+                    next_price = forecast_prices[-1] * (1 + (avg_daily_return/100) * decay_factor)
+                forecast_prices.append(next_price)
+        
+        # Linear Regression method
+        else:  # Linear Regression
+            from sklearn.linear_model import LinearRegression
+            import numpy as np
+            
+            # Use last 30 days for regression
+            regression_days = min(30, len(current_data))
+            regression_data = current_data.iloc[-regression_days:]
+            
+            # Prepare data for regression
+            X = np.array(range(regression_days)).reshape(-1, 1)
+            y = regression_data['Close'].values
+            
+            # Fit regression model
+            model = LinearRegression()
+            model.fit(X, y)
+            
+            # Predict future values
+            X_future = np.array(range(regression_days, regression_days + days_to_forecast)).reshape(-1, 1)
+            forecast_prices = model.predict(X_future)
+        
+        # Create the plot
+        import plotly.graph_objects as go
+        
+        fig = go.Figure()
+        
+        # Add historical data
+        historical_data = current_data.iloc[-30:]  # Show last 30 days
+        fig.add_trace(
+            go.Scatter(
+                x=historical_data.index,
+                y=historical_data['Close'],
+                mode='lines',
+                name='Historical',
+                line=dict(color='blue', width=2)
+            )
+        )
+        
+        # Add forecast
+        fig.add_trace(
+            go.Scatter(
+                x=forecast_dates,
+                y=forecast_prices,
+                mode='lines',
+                name='Forecast',
+                line=dict(color='red', width=2, dash='dash')
+            )
+        )
+        
+        # Add marker for last actual price
+        fig.add_trace(
+            go.Scatter(
+                x=[last_date],
+                y=[last_price],
+                mode='markers',
+                marker=dict(color='black', size=8, symbol='circle'),
+                name='Latest Price'
+            )
+        )
+        
+        # Update layout
+        fig.update_layout(
+            title=f"S&P 500 {days_to_forecast}-Day Price Forecast ({forecasting_method})",
+            xaxis_title="Date",
+            yaxis_title="S&P 500 Price ($)",
+            height=500,
+            template="plotly_white",
+            hovermode="x unified",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
+        # Add range slider
+        fig.update_xaxes(
+            rangeslider_visible=True,
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=7, label="1w", step="day", stepmode="backward"),
+                    dict(count=1, label="1m", step="month", stepmode="backward"),
+                    dict(count=3, label="3m", step="month", stepmode="backward"),
+                    dict(step="all")
+                ])
+            )
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Add disclaimer
+        st.markdown("""
+        **Disclaimer:** This forecast is based on simple technical analysis and historical patterns. 
+        It should not be used as the sole basis for investment decisions. The actual market movement 
+        may differ significantly due to unforeseen events, economic factors, or market sentiment.
+        """)
+    else:
+        st.warning("Not enough historical data available for forecasting.")
     
     # Volume analysis
     st.markdown("### Volume Analysis")
