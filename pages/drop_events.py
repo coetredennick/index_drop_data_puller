@@ -111,25 +111,32 @@ def show_drop_events():
                 initial_index = i
                 break
     
-    # Create a form to prevent page reloads when changing the dropdown
-    with st.form(key="drop_event_selection_form"):
-        # Create dropdown
-        selected_label = st.selectbox(
-            "Choose a drop event to analyze:",
-            options=event_labels,
-            index=initial_index
-        )
-        
-        # Add a submit button
-        submit_button = st.form_submit_button("Analyze Event")
+    # Custom key for the selectbox to store its state
+    dropdown_key = "drop_event_selection_dropdown"
     
-    # Process form submission - this happens whether the form was submitted or not
-    # If this is the first time the page is loaded, or if the form was submitted
-    selected_index = event_labels.index(selected_label)
-    selected_event = all_events[selected_index]
+    # Initialize the dropdown state if it doesn't exist
+    if dropdown_key not in st.session_state:
+        st.session_state[dropdown_key] = event_labels[initial_index]
     
-    # Update session state
-    st.session_state.selected_event = selected_event
+    # Function to handle selection change
+    def handle_selection_change():
+        selected_label = st.session_state[dropdown_key]
+        selected_index = event_labels.index(selected_label)
+        st.session_state.selected_event = all_events[selected_index]
+    
+    # Create dropdown outside of a form (no need for the form anymore)
+    selected_label = st.selectbox(
+        "Choose a drop event to analyze:",
+        options=event_labels,
+        index=event_labels.index(st.session_state[dropdown_key]),
+        key=dropdown_key,
+        on_change=handle_selection_change
+    )
+    
+    # No need for a submit button - changes are applied immediately
+    
+    # Get the currently selected event from session state
+    selected_event = st.session_state.selected_event
     
     # Display event details
     st.markdown("### Event Details")
