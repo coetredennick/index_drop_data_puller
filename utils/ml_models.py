@@ -516,15 +516,15 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
                     # - Less variation in near term (more confidence)
                     # - More variation further out (less confidence)
                     # - Base variation on model's RMSE (accuracy measure)
-                    rmse = model_result['metrics'].get('rmse_test', 2.0)
+                    rmse = float(model_result['metrics'].get('rmse_test', 2.0))
                     time_factor = min(1.0, i / (days_to_forecast * 0.3))  # Ramps up variation over time
-                    variation_scale = rmse * 0.1 * (1 + time_factor)  # Scale variation based on time and model accuracy
+                    variation_scale = float(rmse * 0.1 * (1 + time_factor))  # Scale variation based on time and model accuracy
                     
                     # Add some realistic market behavior variation
-                    variation = np.random.normal(0, variation_scale)
+                    variation = float(np.random.normal(0, variation_scale))
                     
                     # Daily return with appropriate variation
-                    day_return = daily_return + variation
+                    day_return = float(daily_return + variation)
                     
                     # Calculate next price with compounding
                     next_price = forecast_prices[-1] * (1 + day_return/100)
@@ -543,9 +543,9 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
                 
                 for i, price in enumerate(forecast_prices):
                     # Uncertainty grows with square root of time (finance theory)
-                    days_out = i + 1
-                    time_factor = np.sqrt(days_out / 5)  # Scale based on days out
-                    uncertainty = (rmse * ci_factor * time_factor) / 100
+                    days_out = int(i + 1)
+                    time_factor = float(np.sqrt(days_out / 5))  # Scale based on days out
+                    uncertainty = float((rmse * ci_factor * time_factor) / 100)
                     
                     upper_prices.append(price * (1 + uncertainty))
                     lower_prices.append(price * (1 - uncertainty))
