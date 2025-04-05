@@ -80,16 +80,20 @@ def show_drop_events():
     </style>
     """, unsafe_allow_html=True)
     # Check if data and events are available
-    if st.session_state.data is None or st.session_state.data.empty:
+    data_available = st.session_state.data is not None and not st.session_state.data.empty
+    events_available = False
+    
+    if not data_available:
         st.warning("No data available. Please adjust the date range and fetch data.")
-        return
-    
-    # Get all events (both single-day and consecutive)
-    all_events = get_all_events()
-    
-    if not all_events:
-        st.warning(f"No drop events found with the current threshold ({st.session_state.drop_threshold}%). Try lowering the threshold.")
-        return
+    else:
+        # Get all events (both single-day and consecutive)
+        all_events = get_all_events()
+        
+        if not all_events:
+            st.warning(f"No drop events found with the current threshold ({st.session_state.drop_threshold}%). Try lowering the threshold.")
+            all_events = []  # Empty list to avoid None references later
+        else:
+            events_available = True
     
     # Event selection
     st.markdown("### Select Drop Event")

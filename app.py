@@ -20,7 +20,8 @@ from pages.ml_predictions import show_ml_predictions
 st.set_page_config(
     page_title="S&P 500 Market Drop Analyzer",
     page_icon="📉",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"  # Explicitly collapse the sidebar
 )
 
 # Add CSS for clean, modern financial dashboard design

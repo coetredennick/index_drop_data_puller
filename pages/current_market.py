@@ -103,9 +103,11 @@ def show_current_market():
     with st.spinner("Fetching latest market data..."):
         current_data = get_latest_sp500_data()
     
-    if current_data is None or current_data.empty:
+    data_available = current_data is not None and not current_data.empty
+    
+    if not data_available:
         st.error("Failed to fetch current market data. Please try again later.")
-        return
+        current_data = pd.DataFrame()  # Empty DataFrame to avoid NoneType errors
     
     # Calculate technical indicators if not already present
     if 'RSI_14' not in current_data.columns:
@@ -461,7 +463,7 @@ def show_current_market():
                     forecast_prices.append(next_price)
             else:
                 st.warning("Not enough historical data for Moving Average Trend forecast.")
-                return
+                forecast_prices = [last_price] * days_to_forecast  # Flat forecast as fallback
         
         # Recent Momentum method
         elif forecasting_method == "Recent Momentum":

@@ -114,9 +114,11 @@ def show_ml_predictions():
     st.markdown("### Machine Learning Predictions")
     
     # Check if data is available
-    if st.session_state.data is None or st.session_state.data.empty:
+    data_available = st.session_state.data is not None and not st.session_state.data.empty
+    
+    if not data_available:
         st.warning("No data available. Please adjust the date range and fetch data.")
-        return
+    # Continue only if data is available (wrapped in conditional blocks instead of early return)
     
     # Initialize session state for ML models
     if 'ml_models' not in st.session_state:
