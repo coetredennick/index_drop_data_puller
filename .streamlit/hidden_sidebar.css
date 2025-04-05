@@ -1,0 +1,29 @@
+/* PERMANENT REMOVAL of sidebar and ALL related elements */
+[data-testid="stSidebar"],
+[data-testid="baseButton-headerNoPadding"],
+section[data-testid="stSidebar"],
+button[kind="header"],
+span[data-testid="collapsedControl"],
+[data-testid="expandedControl"],
+header button:first-child,
+header [data-testid="baseButton-headerNoPadding"],
+div:has(> [data-testid="stSidebar"]),
+.css-14xtw13,
+.css-9s5bis {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    top: -9999px !important;
+    left: -9999px !important;
+}
+
+/* Force full width main content */
+.main .block-container {
+    max-width: 100% !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+}
