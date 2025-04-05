@@ -386,22 +386,38 @@ def show_ml_predictions():
             else:
                 st.warning(f"No market drops of {abs(drop_threshold)}% or more detected in the selected date range.")
         
-        return
+        # Continue with placeholder info instead of return
     
     # Get the trained model
     model_result = st.session_state.ml_models[target_period]
     
     if not model_result['success']:
         st.error(f"Model error: {model_result.get('error', 'Unknown error')}")
-        return
-    
-    # Add S&P 500 Price Forecast
-    st.markdown("### S&P 500 Price Forecast")
-    
-    from utils.ml_models import create_forecast_chart
-    
-    # Create forecast chart
-    forecast_days_options = {
+        # Display alternative content instead of return
+        st.markdown("""
+        #### Model Training Error
+        
+        The model training was not successful. Please try again with different parameters
+        or check the error message above for details.
+        """)
+        # Create placeholder structure for the rest of the page
+        st.markdown("### S&P 500 Price Forecast")
+        st.info("No forecast available due to model training error.")
+        st.markdown("#### Model Performance")
+        st.info("No performance metrics available.")
+        st.markdown("#### Current Market Prediction")
+        st.info("No predictions available.")
+        # Skip the rest of the prediction logic
+        prediction = None
+    else:
+        # Only show these sections if model was successful
+        # Add S&P 500 Price Forecast
+        st.markdown("### S&P 500 Price Forecast")
+        
+        from utils.ml_models import create_forecast_chart
+        
+        # Create forecast chart
+        forecast_days_options = {
         "7 Days": 7,
         "14 Days": 14,
         "30 Days": 30,
@@ -623,7 +639,13 @@ def show_ml_predictions():
     
     if current_data.empty:
         st.warning("Insufficient data to make predictions for current market conditions.")
-        return
+        # Add empty state display instead of returning
+        st.markdown("""
+        #### Unable to Make Current Prediction
+        
+        The application does not have enough data to make predictions for the current market conditions.
+        Please adjust the date range or try a different model configuration.
+        """)
     
     # Make prediction for the latest data point
     prediction = predict_returns(model_result, current_data, features)
