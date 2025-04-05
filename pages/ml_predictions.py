@@ -486,24 +486,52 @@ def show_ml_predictions():
                 focus_on_drops=False  # Don't filter for forecasting
             )
             
+            # Add specific insights about what the model is using for forecasting
+            model_target_column = model_result.get('target_column', 'Fwd_Ret_1M')
+            target_period = model_target_column.replace('Fwd_Ret_', '') if 'Fwd_Ret_' in model_target_column else '1M'
+            st.info(f"Using ML model trained on {target_period} returns for S&P 500 price forecasting")
+            
+            # Get the most recent price for reference
+            latest_price = st.session_state.data["Close"].iloc[-1] if not st.session_state.data.empty else 0
+            latest_date = st.session_state.data.index[-1] if not st.session_state.data.empty else "N/A"
+            
+            # Show current price information
+            price_col1, price_col2 = st.columns([1, 2])
+            with price_col1:
+                st.metric(
+                    label="Latest S&P 500 Price", 
+                    value=f"${latest_price:.2f}",
+                    delta=f"{st.session_state.data['Return'].iloc[-1]:.2f}%" if not st.session_state.data.empty else None
+                )
+            with price_col2:
+                st.caption(f"As of {latest_date.strftime('%Y-%m-%d') if isinstance(latest_date, pd.Timestamp) else latest_date}")
+                st.caption("The ML forecast is based on this starting price point")
+            
+            # Create and display the updated ML forecast chart
             forecast_chart = create_forecast_chart(
                 model_result,
                 st.session_state.data,
                 features,
                 days_to_forecast=days_to_forecast,
-                title=f"S&P 500 {forecast_days} Price Forecast (Machine Learning Prediction)"
+                title=f"S&P 500 {forecast_days}-Day ML Price Forecast"
             )
             st.plotly_chart(forecast_chart, use_container_width=True)
         
-        # Add description of forecast
-        st.markdown("""
-        **About this forecast:**
-        
-        This machine learning forecast is based on the trained model's predictions of future returns. 
-        The forecast shows the expected price trajectory with a confidence interval (shaded area) 
-        derived from the model's prediction error. This is for educational purposes only and should not 
-        be used as financial advice.
-        """)
+        # Add enhanced description of forecast
+        with st.expander("About this ML forecast", expanded=False):
+            st.markdown("""
+            **How this forecast works:**
+            
+            This advanced ML forecast uses a machine learning model trained specifically on historical S&P 500 market data to predict future price movements. The model analyzes patterns in technical indicators, volatility, and historical returns to project likely price trajectories.
+            
+            **Key elements:**
+            - **Historical Data (Blue Line)**: Shows Year-to-Date (YTD) historical prices
+            - **ML Forecast (Red Line)**: Shows predicted prices based on model analysis
+            - **Confidence Interval (Shaded Area)**: Reflects uncertainty in the prediction, widening with time
+            - **Latest Price (Black Dot)**: The starting point for the forecast
+            
+            *This forecast is for educational purposes only and should not be used as financial advice.*
+            """)
         
         st.markdown("---")
         
@@ -541,6 +569,10 @@ def show_ml_predictions():
     # Visualize model predictions vs actual returns
     if model_result is not None and model_result.get('success', False):
         st.markdown("#### Prediction Performance")
+        
+        # Get target period from model result
+        model_target_column = model_result.get('target_column', 'Fwd_Ret_1M')
+        target_period = model_target_column.replace('Fwd_Ret_', '') if 'Fwd_Ret_' in model_target_column else '1M'
         
         col1, col2 = st.columns(2)
         
@@ -728,7 +760,7 @@ def show_ml_predictions():
                     <div style="border:1px solid {prediction_color}; border-radius:5px; padding:20px; background-color:rgba({0 if prediction_color == 'green' else 255}, {128 if prediction_color == 'green' else 0}, 0, 0.1); text-align:center; margin-bottom:20px;">
                         <h3 style="margin:0; color:{prediction_color};">Predicted {target_period} Return</h3>
                         <div style="font-size:48px; font-weight:bold; margin:10px 0; color:{prediction_color};">{prediction:.2f}%</div>
-                        <p style="margin:0; font-size:14px;">Based on current market conditions using {model_type.replace('_', ' ').title()}</p>
+                        <p style="margin:0; font-size:14px;">Based on current market conditions using {model_result.get('model_type', 'Random Forest').replace('_', ' ').title()}</p>
                     </div>
                     """,
                     unsafe_allow_html=True

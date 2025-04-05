@@ -254,6 +254,8 @@ def train_model(data, features, target_column, model_type='random_forest', test_
     return {
         'success': True,
         'model': model,
+        'model_type': model_type,
+        'target_column': target_column,
         'metrics': metrics,
         'feature_importance': feature_importance,
         'X_test': X_test,
@@ -384,9 +386,9 @@ def create_prediction_chart(model_result, title="Model Predictions vs Actual Ret
     
     return fig
 
-def create_forecast_chart(model_result, data, features, days_to_forecast=30, title="S&P 500 Forecast", height=500):
+def create_forecast_chart(model_result, data, features, days_to_forecast=30, title="S&P 500 ML Forecast", height=500):
     """
-    Create a chart showing the forecasted S&P 500 price based on the trained model
+    Create a chart showing the forecasted S&P 500 price based on the trained ML model
     
     Parameters:
     -----------
@@ -417,7 +419,7 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
         fig.update_layout(
             title=title,
             annotations=[dict(
-                text="No model available for forecasting",
+                text="No ML model available for forecasting. Train a model first.",
                 xref="paper",
                 yref="paper",
                 x=0.5,
@@ -433,7 +435,7 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
         fig.update_layout(
             title=title,
             annotations=[dict(
-                text="Insufficient historical data for forecasting",
+                text="Insufficient historical data for ML forecasting",
                 xref="paper",
                 yref="paper",
                 x=0.5,
@@ -450,7 +452,7 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
         fig.update_layout(
             title=title,
             annotations=[dict(
-                text=f"Missing required features: {', '.join(missing_features[:3])}{'...' if len(missing_features) > 3 else ''}",
+                text=f"Missing ML features: {', '.join(missing_features[:3])}{'...' if len(missing_features) > 3 else ''}",
                 xref="paper",
                 yref="paper",
                 x=0.5,
@@ -472,81 +474,181 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
         # Handle date conversion issues
         forecast_dates = pd.date_range(start=pd.Timestamp.today(), periods=days_to_forecast)
     
-    # Use the model to make a simple prediction based on the most recent data
-    # Instead of trying to update features for each day, we'll use a simpler approach
+    # Find YTD data for better visualization
     try:
-        # Get the baseline prediction for first day
+        current_year = last_date.year
+        start_of_year = pd.Timestamp(year=current_year, month=1, day=1)
+        ytd_data = data[data.index >= start_of_year]
+        if len(ytd_data) < 5:  # If not enough YTD data, use last 60 days
+            ytd_data = data.tail(60)
+    except:
+        # Fallback to last 60 days if year calculation fails
+        ytd_data = data.tail(60)
+    
+    # Use the model to make predictions using ML model
+    try:
+        # Get the most recent market data for prediction
         recent_data = data.tail(1)
         
-        # Simplified approach: predict one-day returns and compound them
+        # Check if we have all required features
         if len(recent_data) > 0 and all(feature in recent_data.columns for feature in features):
-            pred_daily_return = predict_returns(model_result, recent_data, features)
+            # Get the ML model prediction 
+            pred_return = predict_returns(model_result, recent_data, features)
             
-            if pred_daily_return is not None:
-                # Generate forecast series with compound growth
+            if pred_return is not None:
+                # Identify which target period the model was trained on (1W, 1M, 3M, etc.)
+                # This helps scale our predictions appropriately
+                target_column = model_result.get('target_column', 'Fwd_Ret_1M')
+                target_period = target_column.replace('Fwd_Ret_', '') if 'Fwd_Ret_' in target_column else '1M'
+                
+                # Map target periods to approximate trading days for proper scaling
+                trading_days_map = {'1W': 5, '1M': 21, '3M': 63, '6M': 126, '1Y': 252, '3Y': 756}
+                target_days = trading_days_map.get(target_period, 21)  # Default to 1M if unknown
+                
+                # Scale prediction to daily returns (approximate)
+                daily_return = pred_return / target_days
+                
+                # Generate forecast prices with compound growth using ML prediction
                 forecast_prices = [last_price]
+                
                 for i in range(days_to_forecast):
-                    # Compound the returns (slightly randomized to avoid straight line)
-                    variation = np.random.normal(0, 0.15)  # Small random variation
-                    adjusted_return = pred_daily_return + variation
-                    forecast_prices.append(forecast_prices[-1] * (1 + adjusted_return/100))
+                    # Create more realistic variations in daily returns
+                    # - Less variation in near term (more confidence)
+                    # - More variation further out (less confidence)
+                    # - Base variation on model's RMSE (accuracy measure)
+                    rmse = model_result['metrics'].get('rmse_test', 2.0)
+                    time_factor = min(1.0, i / (days_to_forecast * 0.3))  # Ramps up variation over time
+                    variation_scale = rmse * 0.1 * (1 + time_factor)  # Scale variation based on time and model accuracy
+                    
+                    # Add some realistic market behavior variation
+                    variation = np.random.normal(0, variation_scale)
+                    
+                    # Daily return with appropriate variation
+                    day_return = daily_return + variation
+                    
+                    # Calculate next price with compounding
+                    next_price = forecast_prices[-1] * (1 + day_return/100)
+                    forecast_prices.append(next_price)
                 
                 # Remove the initial price (which is the last actual price)
                 forecast_prices = forecast_prices[1:]
                 
-                # Calculate confidence intervals
-                rmse = model_result['metrics'].get('rmse_test', 2.0)  # Default to 2% if not available
-                ci_factor = 1.96  # 95% confidence interval
+                # Calculate robust confidence intervals based on model accuracy
+                rmse = model_result['metrics'].get('rmse_test', 2.0)  # RMSE from model evaluation
+                ci_factor = 1.96  # 95% confidence interval (statistical standard)
                 
-                upper_prices = [price * (1 + (rmse * ci_factor)/100) for price in forecast_prices]
-                lower_prices = [price * (1 - (rmse * ci_factor)/100) for price in forecast_prices]
+                # Generate more realistic confidence intervals that widen with time
+                upper_prices = []
+                lower_prices = []
                 
-                # Add historical data (last 60 days or whatever is available)
-                historical_days = min(60, len(data))
-                historical_data = data.iloc[-historical_days:]
+                for i, price in enumerate(forecast_prices):
+                    # Uncertainty grows with square root of time (finance theory)
+                    days_out = i + 1
+                    time_factor = np.sqrt(days_out / 5)  # Scale based on days out
+                    uncertainty = (rmse * ci_factor * time_factor) / 100
+                    
+                    upper_prices.append(price * (1 + uncertainty))
+                    lower_prices.append(price * (1 - uncertainty))
                 
+                # Add YTD historical data for context
                 fig.add_trace(
                     go.Scatter(
-                        x=historical_data.index,
-                        y=historical_data['Close'],
+                        x=ytd_data.index,
+                        y=ytd_data['Close'],
                         mode='lines',
-                        name='Historical',
+                        name='YTD Historical',
                         line=dict(color='rgba(0, 0, 255, 0.8)', width=2)
                     )
                 )
                 
-                # Add forecast line
+                # Add ML-based forecast line
                 fig.add_trace(
                     go.Scatter(
                         x=forecast_dates,
                         y=forecast_prices,
                         mode='lines',
-                        name='Forecast',
-                        line=dict(color='rgba(255, 0, 0, 0.8)', width=2)
+                        name=f'ML Forecast',
+                        line=dict(color='rgba(255, 0, 0, 0.8)', width=2, dash='dash')
                     )
                 )
                 
-                # Add confidence intervals
+                # Add confidence intervals - fill between upper and lower bounds
                 fig.add_trace(
                     go.Scatter(
-                        x=list(forecast_dates) + list(forecast_dates)[::-1],
-                        y=upper_prices + lower_prices[::-1],
-                        fill='toself',
-                        fillcolor='rgba(255, 0, 0, 0.2)',
-                        line=dict(color='rgba(255, 0, 0, 0)'),
-                        hoverinfo='skip',
-                        name='95% Confidence Interval'
+                        x=forecast_dates,
+                        y=upper_prices,
+                        mode='lines',
+                        line=dict(width=0),
+                        showlegend=False,
+                        hoverinfo='skip'
                     )
                 )
                 
-                # Update layout with nicer formatting
+                fig.add_trace(
+                    go.Scatter(
+                        x=forecast_dates,
+                        y=lower_prices,
+                        mode='lines',
+                        line=dict(width=0),
+                        fill='tonexty',
+                        fillcolor='rgba(255, 0, 0, 0.2)',
+                        name='95% Confidence',
+                        hoverinfo='skip'
+                    )
+                )
+                
+                # Mark the last actual price point
+                fig.add_trace(
+                    go.Scatter(
+                        x=[last_date],
+                        y=[last_price],
+                        mode='markers',
+                        name='Latest Price',
+                        marker=dict(
+                            color='black',
+                            size=10,
+                            symbol='circle'
+                        )
+                    )
+                )
+                
+                # Calculate key forecast statistics
+                end_forecast_price = forecast_prices[-1]
+                forecast_change_pct = ((end_forecast_price / last_price) - 1) * 100
+                forecast_change_direction = "increase" if forecast_change_pct > 0 else "decrease"
+                
+                # Create informative annotations
+                annotations = [
+                    dict(
+                        x=forecast_dates[-1],
+                        y=end_forecast_price,
+                        xref="x",
+                        yref="y",
+                        text=f"${end_forecast_price:.2f} ({forecast_change_pct:+.1f}%)",
+                        showarrow=True,
+                        arrowhead=2,
+                        arrowsize=1,
+                        arrowwidth=2,
+                        ax=40,
+                        ay=-40,
+                        font=dict(
+                            color="red" if forecast_change_pct < 0 else "green",
+                            size=12
+                        )
+                    )
+                ]
+                
+                # Update layout with enhanced styling
                 fig.update_layout(
-                    title=title,
-                    xaxis_title="Date",
-                    yaxis_title="S&P 500 Price ($)",
+                    title=f"{title} (Based on {target_period} Model)",
+                    xaxis_title='Date',
+                    yaxis_title='S&P 500 Price ($)',
                     height=height,
-                    template="plotly_white",
-                    hovermode="x unified",
+                    hovermode='x unified',
+                    annotations=annotations,
+                    yaxis=dict(
+                        tickprefix='$',
+                    ),
                     legend=dict(
                         orientation="h",
                         yanchor="bottom",
@@ -557,9 +659,25 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
                     margin=dict(l=40, r=40, t=50, b=40),
                 )
                 
-                # Add annotations explaining the forecast
+                # Add range slider and selector buttons for better navigation
+                fig.update_xaxes(
+                    rangeslider_visible=True,
+                    rangeselector=dict(
+                        buttons=list([
+                            dict(count=7, label="1w", step="day", stepmode="backward"),
+                            dict(count=1, label="1m", step="month", stepmode="backward"),
+                            dict(count=3, label="3m", step="month", stepmode="backward"),
+                            dict(step="all")
+                        ])
+                    )
+                )
+                
+                # Add footer annotation with model details
+                model_type = model_result.get('model_type', 'Random Forest')
+                model_metrics = f"Model Accuracy: RMSE={rmse:.2f}% | R²={model_result['metrics'].get('r2_test', 0):.2f}"
+                
                 fig.add_annotation(
-                    text=f"Model: {model_result.get('model_type', 'ML Model')} | RMSE: {rmse:.2f}% | CI: 95%",
+                    text=f"ML Model: {model_type} trained on {target_period} returns | {model_metrics}",
                     xref="paper",
                     yref="paper",
                     x=0.5,
@@ -572,12 +690,12 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
                 return fig
                 
     except Exception as e:
-        # If any error occurs during forecasting, create an error chart
+        # If any error occurs during forecasting, log it for debugging
         import traceback
-        print(f"Forecasting error: {str(e)}")
+        print(f"ML Forecasting error: {str(e)}")
         print(traceback.format_exc())
     
-    # If we reach here, something went wrong in the forecasting
+    # If we reach here, something went wrong in the ML forecasting
     # Create a fallback chart with just historical data
     historical_days = min(60, len(data))
     if historical_days > 0:
@@ -605,7 +723,7 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
         
         # Format the layout
         fig.update_layout(
-            title=title + " (Historical Data Only)",
+            title=title + " (ML Model Not Available)",
             xaxis_title="Date",
             yaxis_title="S&P 500 Price ($)",
             height=height,
@@ -620,7 +738,7 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
             ),
             margin=dict(l=40, r=40, t=50, b=40),
             annotations=[dict(
-                text="Insufficient data for forecasting - showing historical data only",
+                text="ML forecasting failed - please train a model first",
                 xref="paper",
                 yref="paper",
                 x=0.5,
@@ -634,7 +752,7 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
         fig.update_layout(
             title=title,
             annotations=[dict(
-                text="No data available for forecasting",
+                text="No data available for ML forecasting",
                 xref="paper",
                 yref="paper",
                 x=0.5,
