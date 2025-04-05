@@ -91,7 +91,7 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
                 current_streak += 1
             else:
                 current_streak = 0
-            streak_values.append(current_streak)
+            streak_values.append(int(current_streak))
         
         # Then set them all at once to avoid the SettingWithCopyWarning
         df.loc[:, 'Drop_Streak'] = streak_values
@@ -106,10 +106,10 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         # First collect all values
         for i in range(len(df)):
             if df['Is_Drop_Day'].iloc[i]:
-                cumulative += df['Return'].iloc[i]
+                cumulative += float(df['Return'].iloc[i])
             else:
                 cumulative = 0
-            cumulative_values.append(cumulative)
+            cumulative_values.append(float(cumulative))
         
         # Then set them all at once to avoid the SettingWithCopyWarning
         df.loc[:, 'Cumulative_Drop'] = cumulative_values
