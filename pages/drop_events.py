@@ -138,66 +138,74 @@ def show_drop_events():
     # Get the currently selected event from session state
     selected_event = st.session_state.selected_event
     
-    # Display event details
-    st.markdown("### Event Details")
+    # Check if selected_event is None (could happen on first load)
+    if selected_event is None and len(all_events) > 0:
+        # Initialize with the first event
+        selected_event = all_events[0]
+        st.session_state.selected_event = selected_event
     
-    # Create columns for event details
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if selected_event['type'] == 'single_day':
-            st.metric(
-                "Event Date", 
-                selected_event['date'].strftime('%Y-%m-%d')
-            )
-        else:
-            st.metric(
-                "Event Period", 
-                f"{selected_event['start_date'].strftime('%Y-%m-%d')} to {selected_event['date'].strftime('%Y-%m-%d')}"
-            )
-    
-    with col2:
-        if selected_event['type'] == 'single_day':
-            st.metric(
-                "Drop Magnitude", 
-                f"{selected_event['drop_pct']:.1f}%",
-                delta=None,
-                delta_color="inverse"
-            )
-        else:
-            st.metric(
-                "Cumulative Drop", 
-                f"{selected_event['cumulative_drop']:.1f}%",
-                delta=f"{selected_event['num_days']} days",
-                delta_color="inverse"
-            )
-    
-    with col3:
-        severity = selected_event['severity']
-        severity_color = {
-            'Severe': 'red',
-            'Major': 'orange',
-            'Significant': 'yellow',
-            'Minor': 'blue'
-        }.get(severity, 'gray')
+    # Only continue if we have a valid selected event
+    if selected_event is not None:
+        # Display event details
+        st.markdown("### Event Details")
         
-        st.markdown(
-            f"""
-            <div style="border:1px solid {severity_color}; border-radius:5px; padding:10px; text-align:center;">
-                <h4 style="margin:0; color:{severity_color};">{severity} Drop</h4>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        # Create columns for event details
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if selected_event['type'] == 'single_day':
+                st.metric(
+                    "Event Date", 
+                    selected_event['date'].strftime('%Y-%m-%d')
+                )
+            else:
+                st.metric(
+                    "Event Period", 
+                    f"{selected_event['start_date'].strftime('%Y-%m-%d')} to {selected_event['date'].strftime('%Y-%m-%d')}"
+                )
     
-    # Show OHLC data for the drop day
-    st.markdown("### Price Data")
+        with col2:
+            if selected_event['type'] == 'single_day':
+                st.metric(
+                    "Drop Magnitude", 
+                    f"{selected_event['drop_pct']:.1f}%",
+                    delta=None,
+                    delta_color="inverse"
+                )
+            else:
+                st.metric(
+                    "Cumulative Drop", 
+                    f"{selected_event['cumulative_drop']:.1f}%",
+                    delta=f"{selected_event['num_days']} days",
+                    delta_color="inverse"
+                )
+        
+        with col3:
+            severity = selected_event['severity']
+            severity_color = {
+                'Severe': 'red',
+                'Major': 'orange',
+                'Significant': 'yellow',
+                'Minor': 'blue'
+            }.get(severity, 'gray')
+            
+            st.markdown(
+                f"""
+                <div style="border:1px solid {severity_color}; border-radius:5px; padding:10px; text-align:center;">
+                    <h4 style="margin:0; color:{severity_color};">{severity} Drop</h4>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
     
-    if selected_event['type'] == 'single_day':
-        # Get data for the drop day
-        drop_date = selected_event['date']
-        if drop_date in st.session_state.data.index:
-            drop_day = st.session_state.data.loc[drop_date]
+        # Show OHLC data for the drop day
+        st.markdown("### Price Data")
+        
+        if selected_event['type'] == 'single_day':
+            # Get data for the drop day
+            drop_date = selected_event['date']
+            if drop_date in st.session_state.data.index:
+                drop_day = st.session_state.data.loc[drop_date]
             
             # Create columns for OHLC data
             col1, col2, col3, col4 = st.columns(4)
@@ -251,10 +259,10 @@ def show_drop_events():
                         "High-Low Range", 
                         f"{drop_day['HL_Range']:.1f}%"
                     )
-    else:
-        # Consecutive day drop - show table with data for each day
-        start_date = selected_event['start_date']
-        end_date = selected_event['date']
+        else:
+            # Consecutive day drop - show table with data for each day
+            start_date = selected_event['start_date']
+            end_date = selected_event['date']
         
         if start_date in st.session_state.data.index and end_date in st.session_state.data.index:
             period_data = st.session_state.data.loc[start_date:end_date].copy()
@@ -325,165 +333,165 @@ def show_drop_events():
                     f"{((period_data['Close'].iloc[-1] / period_data['Open'].iloc[0]) - 1) * 100:.1f}%",
                     delta_color="inverse"
                 )
+        
+        # Show recovery chart
+        st.markdown("### Recovery Performance")
+        
+        # Display forward returns as metrics
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
     
-    # Show recovery chart
-    st.markdown("### Recovery Performance")
-    
-    # Display forward returns as metrics
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    periods = [
-        (col1, '1W', '1 Week'),
-        (col2, '1M', '1 Month'),
-        (col3, '3M', '3 Months'),
-        (col4, '6M', '6 Months'),
-        (col5, '1Y', '1 Year'),
-        (col6, '3Y', '3 Years')
-    ]
-    
-    for col, period_key, period_label in periods:
-        with col:
-            return_key = f'fwd_return_{period_key.lower()}'
-            if return_key in selected_event and not pd.isna(selected_event[return_key]):
-                value = selected_event[return_key]
-                
-                # Determine color based on value
-                if value > 0:
-                    delta_color = "normal"  # Green for positive
+        periods = [
+            (col1, '1W', '1 Week'),
+            (col2, '1M', '1 Month'),
+            (col3, '3M', '3 Months'),
+            (col4, '6M', '6 Months'),
+            (col5, '1Y', '1 Year'),
+            (col6, '3Y', '3 Years')
+        ]
+        
+        for col, period_key, period_label in periods:
+            with col:
+                return_key = f'fwd_return_{period_key.lower()}'
+                if return_key in selected_event and not pd.isna(selected_event[return_key]):
+                    value = selected_event[return_key]
+                    
+                    # Determine color based on value
+                    if value > 0:
+                        delta_color = "normal"  # Green for positive
+                    else:
+                        delta_color = "inverse"  # Red for negative
+                    
+                    st.metric(
+                        period_label, 
+                        f"{value:.1f}%",
+                        delta=None,
+                        delta_color=delta_color
+                    )
                 else:
-                    delta_color = "inverse"  # Red for negative
-                
-                st.metric(
-                    period_label, 
-                    f"{value:.1f}%",
-                    delta=None,
-                    delta_color=delta_color
-                )
-            else:
-                st.metric(
-                    period_label, 
-                    "N/A"
-                )
-    
-    # Create and display recovery chart
-    recovery_fig = create_recovery_chart(st.session_state.data, selected_event)
-    st.plotly_chart(recovery_fig, use_container_width=True)
-    
-    # Show technical indicators
-    st.markdown("### Technical Analysis")
-    
-    # Create cards for technical indicators
-    indicators = ['RSI_14', 'STOCHk_14_3_3', 'BBP_20_2', 'MACDh_12_26_9', 'ATR_Pct', 'Volume_Ratio']
-    
-    # Create columns for indicators
-    col1, col2, col3 = st.columns(3)
-    cols = [col1, col2, col3]
-    
-    for i, indicator in enumerate(indicators):
-        with cols[i % 3]:
-            if indicator in selected_event and not pd.isna(selected_event[indicator]):
-                value = selected_event[indicator]
-                explanation = get_indicator_explanation(indicator, value)
-                
-                # Determine card color based on status
-                if explanation['status'] == 'bullish':
-                    card_color = 'rgba(0, 128, 0, 0.1)'
-                    border_color = 'rgba(0, 128, 0, 0.5)'
-                    text_color = 'green'
-                elif explanation['status'] == 'bearish':
-                    card_color = 'rgba(255, 0, 0, 0.1)'
-                    border_color = 'rgba(255, 0, 0, 0.5)'
-                    text_color = 'darkred'
+                    st.metric(
+                        period_label, 
+                        "N/A"
+                    )
+        
+        # Create and display recovery chart
+        recovery_fig = create_recovery_chart(st.session_state.data, selected_event)
+        st.plotly_chart(recovery_fig, use_container_width=True)
+        
+        # Show technical indicators
+        st.markdown("### Technical Analysis")
+        
+        # Create cards for technical indicators
+        indicators = ['RSI_14', 'STOCHk_14_3_3', 'BBP_20_2', 'MACDh_12_26_9', 'ATR_Pct', 'Volume_Ratio']
+        
+        # Create columns for indicators
+        col1, col2, col3 = st.columns(3)
+        cols = [col1, col2, col3]
+        
+        for i, indicator in enumerate(indicators):
+            with cols[i % 3]:
+                if indicator in selected_event and not pd.isna(selected_event[indicator]):
+                    value = selected_event[indicator]
+                    explanation = get_indicator_explanation(indicator, value)
+                    
+                    # Determine card color based on status
+                    if explanation['status'] == 'bullish':
+                        card_color = 'rgba(0, 128, 0, 0.1)'
+                        border_color = 'rgba(0, 128, 0, 0.5)'
+                        text_color = 'green'
+                    elif explanation['status'] == 'bearish':
+                        card_color = 'rgba(255, 0, 0, 0.1)'
+                        border_color = 'rgba(255, 0, 0, 0.5)'
+                        text_color = 'darkred'
+                    else:
+                        card_color = 'rgba(128, 128, 128, 0.1)'
+                        border_color = 'rgba(128, 128, 128, 0.5)'
+                        text_color = 'gray'
+                    
+                    # Create card with styling
+                    st.markdown(
+                        f"""
+                        <div style="border:1px solid {border_color}; border-radius:5px; padding:10px; background-color:{card_color}; margin-bottom:10px;">
+                            <h4 style="margin:0; color:{text_color};">{explanation['title']}</h4>
+                            <div style="font-size:24px; font-weight:bold; margin:5px 0;">{value:.1f}</div>
+                            <p style="margin:0; font-size:12px;">{explanation['explanation']}</p>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
                 else:
-                    card_color = 'rgba(128, 128, 128, 0.1)'
-                    border_color = 'rgba(128, 128, 128, 0.5)'
-                    text_color = 'gray'
-                
-                # Create card with styling
-                st.markdown(
-                    f"""
-                    <div style="border:1px solid {border_color}; border-radius:5px; padding:10px; background-color:{card_color}; margin-bottom:10px;">
-                        <h4 style="margin:0; color:{text_color};">{explanation['title']}</h4>
-                        <div style="font-size:24px; font-weight:bold; margin:5px 0;">{value:.1f}</div>
-                        <p style="margin:0; font-size:12px;">{explanation['explanation']}</p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-            else:
-                # No data available
-                st.markdown(
-                    f"""
-                    <div style="border:1px solid #ddd; border-radius:5px; padding:10px; background-color:#f9f9f9; margin-bottom:10px;">
-                        <h4 style="margin:0; color:#666;">{indicator}</h4>
-                        <div style="font-size:24px; font-weight:bold; margin:5px 0;">N/A</div>
-                        <p style="margin:0; font-size:12px;">No data available for this indicator.</p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-    
-    # Create tabs for individual indicator charts
-    indicator_tabs = st.tabs([
-        "RSI", "Stochastic", "Bollinger Bands", "MACD", "ATR", "Volume"
-    ])
-    
-    # RSI Chart
-    with indicator_tabs[0]:
-        rsi_fig = create_technical_indicator_chart(
-            st.session_state.data, 
-            selected_event, 
-            'RSI_14', 
-            "RSI (14) Around Drop Event"
-        )
-        st.plotly_chart(rsi_fig, use_container_width=True)
-    
-    # Stochastic Chart
-    with indicator_tabs[1]:
-        stoch_fig = create_technical_indicator_chart(
-            st.session_state.data, 
-            selected_event, 
-            'STOCHk_14_3_3', 
-            "Stochastic %K (14,3,3) Around Drop Event"
-        )
-        st.plotly_chart(stoch_fig, use_container_width=True)
-    
-    # Bollinger Band Position Chart
-    with indicator_tabs[2]:
-        bb_fig = create_technical_indicator_chart(
-            st.session_state.data, 
-            selected_event, 
-            'BBP_20_2', 
-            "Bollinger Band Position (20,2) Around Drop Event"
-        )
-        st.plotly_chart(bb_fig, use_container_width=True)
-    
-    # MACD Histogram Chart
-    with indicator_tabs[3]:
-        macd_fig = create_technical_indicator_chart(
-            st.session_state.data, 
-            selected_event, 
-            'MACDh_12_26_9', 
-            "MACD Histogram (12,26,9) Around Drop Event"
-        )
-        st.plotly_chart(macd_fig, use_container_width=True)
-    
-    # ATR Chart
-    with indicator_tabs[4]:
-        atr_fig = create_technical_indicator_chart(
-            st.session_state.data, 
-            selected_event, 
-            'ATR_Pct', 
-            "ATR % Around Drop Event"
-        )
-        st.plotly_chart(atr_fig, use_container_width=True)
-    
-    # Volume Chart
-    with indicator_tabs[5]:
-        vol_fig = create_technical_indicator_chart(
-            st.session_state.data, 
-            selected_event, 
-            'Volume_Ratio', 
-            "Volume Ratio Around Drop Event"
-        )
-        st.plotly_chart(vol_fig, use_container_width=True)
+                    # No data available
+                    st.markdown(
+                        f"""
+                        <div style="border:1px solid #ddd; border-radius:5px; padding:10px; background-color:#f9f9f9; margin-bottom:10px;">
+                            <h4 style="margin:0; color:#666;">{indicator}</h4>
+                            <div style="font-size:24px; font-weight:bold; margin:5px 0;">N/A</div>
+                            <p style="margin:0; font-size:12px;">No data available for this indicator.</p>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+        
+        # Create tabs for individual indicator charts
+        indicator_tabs = st.tabs([
+            "RSI", "Stochastic", "Bollinger Bands", "MACD", "ATR", "Volume"
+        ])
+        
+        # RSI Chart
+        with indicator_tabs[0]:
+            rsi_fig = create_technical_indicator_chart(
+                st.session_state.data, 
+                selected_event, 
+                'RSI_14', 
+                "RSI (14) Around Drop Event"
+            )
+            st.plotly_chart(rsi_fig, use_container_width=True)
+        
+        # Stochastic Chart
+        with indicator_tabs[1]:
+            stoch_fig = create_technical_indicator_chart(
+                st.session_state.data, 
+                selected_event, 
+                'STOCHk_14_3_3', 
+                "Stochastic %K (14,3,3) Around Drop Event"
+            )
+            st.plotly_chart(stoch_fig, use_container_width=True)
+        
+        # Bollinger Band Position Chart
+        with indicator_tabs[2]:
+            bb_fig = create_technical_indicator_chart(
+                st.session_state.data, 
+                selected_event, 
+                'BBP_20_2', 
+                "Bollinger Band Position (20,2) Around Drop Event"
+            )
+            st.plotly_chart(bb_fig, use_container_width=True)
+        
+        # MACD Histogram Chart
+        with indicator_tabs[3]:
+            macd_fig = create_technical_indicator_chart(
+                st.session_state.data, 
+                selected_event, 
+                'MACDh_12_26_9', 
+                "MACD Histogram (12,26,9) Around Drop Event"
+            )
+            st.plotly_chart(macd_fig, use_container_width=True)
+        
+        # ATR Chart
+        with indicator_tabs[4]:
+            atr_fig = create_technical_indicator_chart(
+                st.session_state.data, 
+                selected_event, 
+                'ATR_Pct', 
+                "ATR % Around Drop Event"
+            )
+            st.plotly_chart(atr_fig, use_container_width=True)
+        
+        # Volume Chart
+        with indicator_tabs[5]:
+            vol_fig = create_technical_indicator_chart(
+                st.session_state.data, 
+                selected_event, 
+                'Volume_Ratio', 
+                "Volume Ratio Around Drop Event"
+            )
+            st.plotly_chart(vol_fig, use_container_width=True)
