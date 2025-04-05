@@ -207,11 +207,8 @@ st.markdown("""
 
 # Cleaner title and description layout
 st.markdown("""
-<div style="text-align: center; padding: 1rem 0; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 1rem;">
-    <h1 style="margin: 0; padding: 0; color: #1E4A7B;">S&P 500 Market Drop Analyzer</h1>
-    <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #5A6570;">
-        Simplified visualization of market performance with drop event analysis and ML forecasting
-    </p>
+<div style="text-align: center; padding: 0.5rem 0; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 0.5rem;">
+    <h1 style="margin: 0; padding: 0; color: #1E4A7B; font-size: 22px;">S&P 500 Market Drop Analyzer</h1>
 </div>
 """
 , unsafe_allow_html=True)
@@ -378,7 +375,6 @@ with tab1:
 # Market Analysis Tab
 with tab2:
     # Key market metrics
-    st.write("## Market Drop Event Analysis")
     
     # Show analysis metrics
     metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
@@ -416,7 +412,6 @@ with tab2:
         st.metric("Largest Single Day Drop", f"{largest_drop:.2f}%")
     
     # Create a table of drop events
-    st.write("### Drop Event Database")
     
     # Combine all events
     all_events = []
@@ -462,12 +457,9 @@ with tab2:
         st.dataframe(events_df, use_container_width=True)
     
     # Recovery analysis
-    st.write("### Aggregate Recovery Analysis")
-    
     recovery_col1, recovery_col2 = st.columns(2)
     
     with recovery_col1:
-        st.write("#### Average Returns After Drop Events")
         
         # Calculate average returns for different periods
         if all_events and len(all_events) > 0 and st.session_state.data is not None:
@@ -516,7 +508,6 @@ with tab2:
             st.info("No drop events detected or data not available for recovery analysis.")
     
     with recovery_col2:
-        st.write("#### Market Drop Seasonality")
         
         # Analyze monthly distribution of drops
         if all_events and len(all_events) > 0:
@@ -550,7 +541,6 @@ with tab2:
 
 # ML Predictions Tab
 with tab3:
-    st.write("## Machine Learning Price Forecasting")
     
     # ML model settings
     with st.expander("🤖 ML Model Settings", expanded=False):
@@ -620,16 +610,11 @@ with tab3:
     
     # Display ML prediction results
     if st.session_state.ml_model_result is not None and st.session_state.ml_model_result.get('success', False):
-        st.write("### ML Model Performance")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.write("#### Target Period")
-            st.info(f"The model is trained to predict returns over {target_period} time horizon.")
-            
             # Display prediction details
-            st.write("#### Latest S&P 500 Price")
             latest_price = 0
             if st.session_state.data is not None and not st.session_state.data.empty:
                 latest_price = st.session_state.data['Close'].iloc[-1]
@@ -638,7 +623,6 @@ with tab3:
                 st.caption(f"As of {latest_date.strftime('%Y-%m-%d')}")
             
             # Display forecast
-            st.write("#### ML Price Forecast")
             forecast_dates = st.session_state.ml_model_result.get('forecast_dates', [])
             forecast_prices = st.session_state.ml_model_result.get('forecast_prices', [])
             
@@ -656,25 +640,14 @@ with tab3:
                 )
         
         with col2:
-            st.write("#### Forecast Instructions")
-            st.markdown("""
-            **To view the S&P 500 forecast visualization:**
-            1. Go to the **Market Visualization** tab
-            2. Check the **Show ML Forecast** checkbox
-            3. The forecast will appear as a green line continuing from the blue price line
-            4. Lighter green shading shows the confidence interval
-            
-            The ML model analyzes historical patterns, technical indicators, and market behavior 
-            to generate these predictions.
-            """)
+            # Display performance metrics
+            if 'metrics' in st.session_state.ml_model_result:
+                metrics = st.session_state.ml_model_result['metrics']
+                st.metric("R²", f"{metrics.get('r2', 0):.4f}")
+                st.metric("MAE", f"{metrics.get('mae', 0):.4f}")
+                st.metric("RMSE", f"{metrics.get('rmse', 0):.4f}")
     else:
         st.info("No ML model has been trained yet. Click the 'Train ML Model' button to create a forecast.")
 
-# Add footer
-st.markdown("""
-<div style="margin-top: 30px; text-align: center; padding: 10px; font-size: 0.8em; color: #6c757d; border-top: 1px solid #f0f2f6;">
-    <p style="margin: 5px 0;">
-        S&P 500 Market Drop Analyzer - A simplified visualization tool for market analysis
-    </p>
-</div>
-""", unsafe_allow_html=True)
+# Minimal footer
+st.markdown("""<div style="margin-top: 20px; border-top: 1px solid #f0f2f6;"></div>""", unsafe_allow_html=True)
