@@ -15,7 +15,8 @@ from utils.ml_models import (
     train_model, 
     predict_returns, 
     create_prediction_chart,
-    create_feature_importance_chart
+    create_feature_importance_chart,
+    create_forecast_chart
 )
 
 def show_ml_predictions():
@@ -229,7 +230,6 @@ def show_ml_predictions():
                         st.error(f"Model training failed: {model_result.get('error', 'Unknown error')}")
                 else:
                     st.error(f"No forward return data available. Try adjusting the date range or drop threshold.")
-                    return
             else:
                 # Train the model with the requested column
                 model_result = train_model(
@@ -385,13 +385,28 @@ def show_ml_predictions():
                     )
             else:
                 st.warning(f"No market drops of {abs(drop_threshold)}% or more detected in the selected date range.")
-        
-        # Continue with placeholder info instead of return
+        return  # Exit early if no model is trained
     
     # Get the trained model
     model_result = st.session_state.ml_models[target_period]
     
-    if not model_result['success']:
+    # Check if model is None or training failed
+    if model_result is None:
+        # No model trained yet, show placeholder
+        st.info("No model has been trained yet. Use the 'Train Model on Market Drops' button above to train a model.")
+        # Show some basic info about what to expect
+        st.markdown("""
+        #### About Machine Learning Predictions
+        
+        Training a model will allow you to:
+        1. Forecast S&P 500 prices using machine learning
+        2. Understand feature importance in market predictions
+        3. Analyze patterns in market drop recoveries
+        4. Make predictions based on current market conditions
+        """)
+        return
+    
+    elif not model_result['success']:
         st.error(f"Model error: {model_result.get('error', 'Unknown error')}")
         # Display alternative content instead of return
         st.markdown("""
@@ -408,16 +423,14 @@ def show_ml_predictions():
         st.markdown("#### Current Market Prediction")
         st.info("No predictions available.")
         # Skip the rest of the prediction logic
-        prediction = None
-    else:
-        # Only show these sections if model was successful
-        # Add S&P 500 Price Forecast
-        st.markdown("### S&P 500 Price Forecast")
-        
-        from utils.ml_models import create_forecast_chart
-        
-        # Create forecast chart
-        forecast_days_options = {
+        return
+    
+    # Only show these sections if model was successful
+    # Add S&P 500 Price Forecast
+    st.markdown("### S&P 500 Price Forecast")
+    
+    # Create forecast chart
+    forecast_days_options = {
         "7 Days": 7,
         "14 Days": 14,
         "30 Days": 30,
@@ -437,6 +450,12 @@ def show_ml_predictions():
         days_to_forecast = forecast_days_options[forecast_days]
     
     with forecast_col1:
+        # Prepare features for forecasting
+        current_data, features = prepare_features(
+            st.session_state.data,
+            focus_on_drops=False  # Don't filter for forecasting
+        )
+        
         forecast_chart = create_forecast_chart(
             model_result,
             st.session_state.data,
@@ -600,6 +619,7 @@ def show_ml_predictions():
                             
                             with plot_cols[0]:
                                 # Relationship between drop streak and returns
+                                import plotly.express as px
                                 fig = px.box(
                                     drop_data,
                                     x='Drop_Streak',
@@ -615,6 +635,7 @@ def show_ml_predictions():
                             with plot_cols[1]:
                                 # Relationship between RSI and returns
                                 if 'RSI_14' in drop_data.columns:
+                                    import plotly.express as px
                                     fig = px.scatter(
                                         drop_data,
                                         x='RSI_14',
@@ -646,6 +667,7 @@ def show_ml_predictions():
         The application does not have enough data to make predictions for the current market conditions.
         Please adjust the date range or try a different model configuration.
         """)
+        return
     
     # Make prediction for the latest data point
     prediction = predict_returns(model_result, current_data, features)
