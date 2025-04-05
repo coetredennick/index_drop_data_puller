@@ -385,7 +385,8 @@ def show_ml_predictions():
                     )
             else:
                 st.warning(f"No market drops of {abs(drop_threshold)}% or more detected in the selected date range.")
-        return  # Exit early if no model is trained
+        
+        # Continue to show placeholder content for untrained model instead of returning
     
     # Get the trained model
     model_result = st.session_state.ml_models[target_period]
@@ -404,6 +405,11 @@ def show_ml_predictions():
         3. Analyze patterns in market drop recoveries
         4. Make predictions based on current market conditions
         """)
+        # Skip the rest of the model-dependent sections instead of returning
+        st.markdown("### S&P 500 Price Forecast")
+        st.info("No forecast available until a model is trained.")
+        st.markdown("#### Current Market Prediction")
+        st.info("No predictions available until a model is trained.")
         return
     
     elif not model_result['success']:
@@ -667,7 +673,13 @@ def show_ml_predictions():
         The application does not have enough data to make predictions for the current market conditions.
         Please adjust the date range or try a different model configuration.
         """)
-        return
+        # Display a placeholder for the prediction section
+        st.markdown("""
+        #### No Current Prediction Available
+        
+        Try expanding your date range or adjusting your model parameters to enable predictions.
+        """)
+        return  # Skip remaining prediction display logic
     
     # Make prediction for the latest data point
     prediction = predict_returns(model_result, current_data, features)
