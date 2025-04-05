@@ -484,7 +484,7 @@ def show_current_market():
         # Linear Regression method
         else:  # Linear Regression
             from sklearn.linear_model import LinearRegression
-            import numpy as np
+            # Use the global numpy import instead of re-importing
             
             # Use last 30 days for regression
             regression_days = min(30, len(current_data))
@@ -503,7 +503,7 @@ def show_current_market():
             forecast_prices = model.predict(X_future)
         
         # Create the plot
-        import plotly.graph_objects as go
+        # Use the global plotly.graph_objects import (already imported as go at the top)
         
         fig = go.Figure()
         
