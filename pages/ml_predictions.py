@@ -130,56 +130,61 @@ def show_ml_predictions():
     # Model settings
     st.markdown("#### Model Configuration")
     
-    col1, col2, col3 = st.columns(3)
+    # Create a form for model settings to prevent page reloads when adjusting sliders
+    with st.form(key="model_settings_form"):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            model_type = st.selectbox(
+                "Model Type",
+                options=["random_forest", "gradient_boosting", "linear_regression"],
+                index=0,
+                help="Select the type of machine learning model to train"
+            )
+        
+        with col2:
+            target_period = st.selectbox(
+                "Prediction Target",
+                options=["1W", "1M", "3M", "6M", "1Y"],
+                index=1,
+                help="Select the time horizon for return predictions"
+            )
+        
+        with col3:
+            test_size = st.slider(
+                "Test Data Size",
+                min_value=0.1,
+                max_value=0.5,
+                value=0.2,
+                step=0.05,
+                help="Proportion of data to use for testing the model"
+            )
+        
+        # Add market drop threshold controls
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            drop_threshold = st.slider(
+                "Market Drop Threshold (%)",
+                min_value=-10.0,
+                max_value=-1.0,
+                value=-3.0,
+                step=0.5,
+                help="Minimum percentage drop to be considered a significant market event"
+            )
+        
+        with col2:
+            focus_on_drops = st.checkbox(
+                "Focus on Market Drops",
+                value=True,
+                help="When enabled, the model will specifically focus on data from market drop events"
+            )
+        
+        # Form submit button
+        train_model_button = st.form_submit_button("Train Model on Market Drops")
     
-    with col1:
-        model_type = st.selectbox(
-            "Model Type",
-            options=["random_forest", "gradient_boosting", "linear_regression"],
-            index=0,
-            help="Select the type of machine learning model to train"
-        )
-    
-    with col2:
-        target_period = st.selectbox(
-            "Prediction Target",
-            options=["1W", "1M", "3M", "6M", "1Y"],
-            index=1,
-            help="Select the time horizon for return predictions"
-        )
-    
-    with col3:
-        test_size = st.slider(
-            "Test Data Size",
-            min_value=0.1,
-            max_value=0.5,
-            value=0.2,
-            step=0.05,
-            help="Proportion of data to use for testing the model"
-        )
-    
-    # Add market drop threshold controls
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        drop_threshold = st.slider(
-            "Market Drop Threshold (%)",
-            min_value=-10.0,
-            max_value=-1.0,
-            value=-3.0,
-            step=0.5,
-            help="Minimum percentage drop to be considered a significant market event"
-        )
-    
-    with col2:
-        focus_on_drops = st.checkbox(
-            "Focus on Market Drops",
-            value=True,
-            help="When enabled, the model will specifically focus on data from market drop events"
-        )
-    
-    # Train model button
-    if st.button("Train Model on Market Drops"):
+    # Process form submission outside the form block
+    if train_model_button:
         with st.spinner(f"Training {model_type} model for {target_period} returns after market drops..."):
             # Prepare features with drop focus
             data, features = prepare_features(

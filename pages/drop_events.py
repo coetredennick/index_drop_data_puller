@@ -107,14 +107,20 @@ def show_drop_events():
                 initial_index = i
                 break
     
-    # Create dropdown
-    selected_label = st.selectbox(
-        "Choose a drop event to analyze:",
-        options=event_labels,
-        index=initial_index
-    )
+    # Create a form to prevent page reloads when changing the dropdown
+    with st.form(key="drop_event_selection_form"):
+        # Create dropdown
+        selected_label = st.selectbox(
+            "Choose a drop event to analyze:",
+            options=event_labels,
+            index=initial_index
+        )
+        
+        # Add a submit button
+        submit_button = st.form_submit_button("Analyze Event")
     
-    # Get the selected event
+    # Process form submission - this happens whether the form was submitted or not
+    # If this is the first time the page is loaded, or if the form was submitted
     selected_index = event_labels.index(selected_label)
     selected_event = all_events[selected_index]
     

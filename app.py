@@ -173,78 +173,81 @@ if 'selected_event' not in st.session_state:
 
 # Main page settings in a clean, collapsible container
 with st.expander("📊 Analysis Settings", expanded=False):
-    # Use two columns for a cleaner layout - left for dates, right for thresholds
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Date Range</h4>", unsafe_allow_html=True)
-        date_col1, date_col2 = st.columns(2)
+    # Use a form to prevent reloads when adjusting sliders
+    with st.form(key="analysis_settings_form"):
+        # Use two columns for a cleaner layout - left for dates, right for thresholds
+        col1, col2 = st.columns([1, 1])
         
-        with date_col1:
-            start_date = st.date_input(
-                "Start Date",
-                value=pd.to_datetime(st.session_state.date_range[0]),
-                min_value=pd.to_datetime('1950-01-01'),
-                max_value=datetime.today() - timedelta(days=1),
-                key="start_date"
-            )
-        
-        with date_col2:
-            end_date = st.date_input(
-                "End Date",
-                value=pd.to_datetime(st.session_state.date_range[1]),
-                min_value=pd.to_datetime('1950-01-01'),
-                max_value=datetime.today(),
-                key="end_date"
-            )
-    
-    with col2:
-        st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Drop Event Detection</h4>", unsafe_allow_html=True)
-        
-        drop_threshold = st.slider(
-            "Drop Threshold (%)",
-            min_value=0.1,
-            max_value=20.0,
-            value=st.session_state.drop_threshold,
-            step=0.1,
-            help="Minimum percentage drop to be considered as a significant market event"
-        )
-        
-        detection_col1, detection_col2 = st.columns([3, 2])
-        
-        with detection_col1:
-            use_consecutive = st.checkbox(
-                "Detect Consecutive Drops",
-                value=st.session_state.consecutive_days > 1,
-                help="Detect sequences of consecutive days where each day fell by more than the threshold"
-            )
-        
-        with detection_col2:
-            consecutive_days = 1
-            if use_consecutive:
-                consecutive_days = st.number_input(
-                    "Days",
-                    min_value=2,
-                    max_value=5,
-                    value=max(2, st.session_state.consecutive_days),
-                    help="Number of consecutive days each with drops exceeding the threshold"
+        with col1:
+            st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Date Range</h4>", unsafe_allow_html=True)
+            date_col1, date_col2 = st.columns(2)
+            
+            with date_col1:
+                start_date = st.date_input(
+                    "Start Date",
+                    value=pd.to_datetime(st.session_state.date_range[0]),
+                    min_value=pd.to_datetime('1950-01-01'),
+                    max_value=datetime.today() - timedelta(days=1),
+                    key="start_date"
                 )
+            
+            with date_col2:
+                end_date = st.date_input(
+                    "End Date",
+                    value=pd.to_datetime(st.session_state.date_range[1]),
+                    min_value=pd.to_datetime('1950-01-01'),
+                    max_value=datetime.today(),
+                    key="end_date"
+                )
+        
+        with col2:
+            st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Drop Event Detection</h4>", unsafe_allow_html=True)
+            
+            drop_threshold = st.slider(
+                "Drop Threshold (%)",
+                min_value=0.1,
+                max_value=20.0,
+                value=st.session_state.drop_threshold,
+                step=0.1,
+                help="Minimum percentage drop to be considered as a significant market event"
+            )
+            
+            detection_col1, detection_col2 = st.columns([3, 2])
+            
+            with detection_col1:
+                use_consecutive = st.checkbox(
+                    "Detect Consecutive Drops",
+                    value=st.session_state.consecutive_days > 1,
+                    help="Detect sequences of consecutive days where each day fell by more than the threshold"
+                )
+            
+            with detection_col2:
+                consecutive_days = 1
+                if use_consecutive:
+                    consecutive_days = st.number_input(
+                        "Days",
+                        min_value=2,
+                        max_value=5,
+                        value=max(2, st.session_state.consecutive_days),
+                        help="Number of consecutive days each with drops exceeding the threshold"
+                    )
+        
+        # Form submit button
+        submit_button = st.form_submit_button("Apply Settings", use_container_width=True)
     
-    # Centered apply button with improved styling
-    _, btn_col, _ = st.columns([1, 2, 1])
-    with btn_col:
-        if st.button("Apply Settings", key="apply_settings", use_container_width=True):
-            # Update session state
-            st.session_state.drop_threshold = drop_threshold
-            st.session_state.consecutive_days = consecutive_days if use_consecutive else 1
-            st.session_state.date_range = (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
-            
-            # Reset selected event when settings change
-            st.session_state.selected_event = None
-            
-            # Show info message
-            st.success("✅ Settings applied! Data will be refreshed.")
-            st.rerun()
+    # Process form submission outside the form block
+    if submit_button:
+        # Update session state
+        st.session_state.drop_threshold = drop_threshold
+        st.session_state.consecutive_days = consecutive_days if use_consecutive else 1
+        st.session_state.date_range = (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+        
+        # Reset selected event when settings change
+        st.session_state.selected_event = None
+        
+        # Show info message
+        st.success("✅ Settings applied! Data will be refreshed.")
+        st.rerun()
 
 # Data source info with improved styling
 st.markdown("""
