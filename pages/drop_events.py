@@ -80,7 +80,7 @@ def show_drop_events():
     </style>
     """, unsafe_allow_html=True)
     # Check if data and events are available
-    if not st.session_state.data is not None or st.session_state.data.empty:
+    if st.session_state.data is None or st.session_state.data.empty:
         st.warning("No data available. Please adjust the date range and fetch data.")
         return
     
