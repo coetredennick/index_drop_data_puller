@@ -25,9 +25,31 @@ st.set_page_config(
     menu_items={}
 )
 
-# Load external CSS to permanently hide sidebar (in addition to inline CSS)
-with open('.streamlit/hidden_sidebar.css') as f:
-    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+# Use inline CSS only to hide sidebar (simpler approach)
+st.markdown("""
+<style>
+/* PERMANENT REMOVAL of sidebar and ALL related elements */
+[data-testid="stSidebar"],
+[data-testid="baseButton-headerNoPadding"],
+section[data-testid="stSidebar"],
+button[kind="header"],
+span[data-testid="collapsedControl"],
+[data-testid="expandedControl"],
+header button:first-child,
+header [data-testid="baseButton-headerNoPadding"],
+div:has(> [data-testid="stSidebar"]) {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    top: -9999px !important;
+    left: -9999px !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Add CSS for clean, modern financial dashboard design
 st.markdown("""
