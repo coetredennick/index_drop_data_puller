@@ -38,14 +38,31 @@ st.markdown("""
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
-    /* Hide the default Streamlit navigation sidebar */
+    /* Hide the default Streamlit navigation sidebar and all related elements */
     section[data-testid="stSidebar"] {
         display: none !important;
     }
     
-    /* Hide the hamburger menu that shows the navigation sidebar */
-    button[kind="header"] {
+    /* Hide the hamburger menu that shows the navigation sidebar - stronger selector */
+    header[data-testid="stHeader"] > div:first-child > div:first-child {
         display: none !important;
+    }
+    
+    /* Hide the hamburger menu completely */
+    button[kind="header"], 
+    *[data-testid="collapsedControl"],
+    *[data-testid="expandedControl"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        height: 0 !important;
+        width: 0 !important;
+        pointer-events: none !important;
+    }
+    
+    /* Clean up left padding now that the sidebar toggle is gone */
+    header[data-testid="stHeader"] {
+        padding-left: 1rem !important;
     }
     
     /* Main header styling */

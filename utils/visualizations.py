@@ -257,12 +257,14 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
     # Get one year of data after the event or as much as is available
     end_date = event_date + timedelta(days=365)
     current_date = datetime.now().date()
-    if pd.Timestamp(end_date).date() > current_date:
-        end_date = current_date
     
-    # Convert dates to pandas Timestamps for comparison with DatetimeIndex
+    # Make sure all dates are converted to pandas Timestamps for compatibility with DatetimeIndex
     start_ts = pd.Timestamp(start_date)
     end_ts = pd.Timestamp(end_date)
+    
+    # Ensure we don't try to get data from the future
+    if end_ts > pd.Timestamp(datetime.now()):
+        end_ts = pd.Timestamp(datetime.now())
     
     # Filter data for the selected period
     mask = (data.index >= start_ts) & (data.index <= end_ts)
@@ -485,13 +487,14 @@ def create_technical_indicator_chart(data, event, indicator, title=None, height=
     
     # Get 60 days of data after the event or as much as is available
     end_date = event_date + timedelta(days=60)
-    current_date = datetime.now().date()
-    if pd.Timestamp(end_date).date() > current_date:
-        end_date = current_date
     
-    # Convert dates to pandas Timestamps for comparison with DatetimeIndex
+    # Make sure all dates are converted to pandas Timestamps for compatibility with DatetimeIndex
     start_ts = pd.Timestamp(start_date)
     end_ts = pd.Timestamp(end_date)
+    
+    # Ensure we don't try to get data from the future
+    if end_ts > pd.Timestamp(datetime.now()):
+        end_ts = pd.Timestamp(datetime.now())
     
     # Filter data for the selected period
     mask = (data.index >= start_ts) & (data.index <= end_ts)

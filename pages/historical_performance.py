@@ -167,7 +167,7 @@ def show_historical_performance():
     # Convert to a more readable format with time periods as index
     agg_returns_df = agg_returns_df.set_index('Period')
     
-    # Function to apply color formatting
+    # Function to apply color formatting based on value only
     def color_scale(val):
         if pd.isna(val):
             return ''
