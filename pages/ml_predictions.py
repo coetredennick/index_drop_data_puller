@@ -131,6 +131,18 @@ def show_ml_predictions():
     # Model settings
     st.markdown("#### Model Configuration")
     
+    # Initialize or get form state from session state
+    if 'ml_model_type' not in st.session_state:
+        st.session_state.ml_model_type = "random_forest"
+    if 'ml_target_period' not in st.session_state:
+        st.session_state.ml_target_period = "1M"
+    if 'ml_test_size' not in st.session_state:
+        st.session_state.ml_test_size = 0.2
+    if 'ml_drop_threshold' not in st.session_state:
+        st.session_state.ml_drop_threshold = -3.0
+    if 'ml_focus_on_drops' not in st.session_state:
+        st.session_state.ml_focus_on_drops = True
+    
     # Create a form for model settings to prevent page reloads when adjusting sliders
     with st.form(key="model_settings_form"):
         col1, col2, col3 = st.columns(3)
@@ -139,16 +151,18 @@ def show_ml_predictions():
             model_type = st.selectbox(
                 "Model Type",
                 options=["random_forest", "gradient_boosting", "linear_regression"],
-                index=0,
-                help="Select the type of machine learning model to train"
+                index=["random_forest", "gradient_boosting", "linear_regression"].index(st.session_state.ml_model_type),
+                help="Select the type of machine learning model to train",
+                key="form_model_type"
             )
         
         with col2:
             target_period = st.selectbox(
                 "Prediction Target",
                 options=["1W", "1M", "3M", "6M", "1Y"],
-                index=1,
-                help="Select the time horizon for return predictions"
+                index=["1W", "1M", "3M", "6M", "1Y"].index(st.session_state.ml_target_period),
+                help="Select the time horizon for return predictions",
+                key="form_target_period"
             )
         
         with col3:
@@ -156,9 +170,10 @@ def show_ml_predictions():
                 "Test Data Size",
                 min_value=0.1,
                 max_value=0.5,
-                value=0.2,
+                value=st.session_state.ml_test_size,
                 step=0.05,
-                help="Proportion of data to use for testing the model"
+                help="Proportion of data to use for testing the model",
+                key="form_test_size"
             )
         
         # Add market drop threshold controls
@@ -169,16 +184,18 @@ def show_ml_predictions():
                 "Market Drop Threshold (%)",
                 min_value=-10.0,
                 max_value=-1.0,
-                value=-3.0,
+                value=st.session_state.ml_drop_threshold,
                 step=0.5,
-                help="Minimum percentage drop to be considered a significant market event"
+                help="Minimum percentage drop to be considered a significant market event",
+                key="form_drop_threshold"
             )
         
         with col2:
             focus_on_drops = st.checkbox(
                 "Focus on Market Drops",
-                value=True,
-                help="When enabled, the model will specifically focus on data from market drop events"
+                value=st.session_state.ml_focus_on_drops,
+                help="When enabled, the model will specifically focus on data from market drop events",
+                key="form_focus_on_drops"
             )
         
         # Form submit button
@@ -186,6 +203,12 @@ def show_ml_predictions():
     
     # Process form submission outside the form block
     if train_model_button:
+        # Save form values to session state first
+        st.session_state.ml_model_type = model_type
+        st.session_state.ml_target_period = target_period
+        st.session_state.ml_test_size = test_size
+        st.session_state.ml_drop_threshold = drop_threshold
+        st.session_state.ml_focus_on_drops = focus_on_drops
         with st.spinner(f"Training {model_type} model for {target_period} returns after market drops..."):
             # Prepare features with drop focus
             data, features = prepare_features(
@@ -410,7 +433,6 @@ def show_ml_predictions():
         st.info("No forecast available until a model is trained.")
         st.markdown("#### Current Market Prediction")
         st.info("No predictions available until a model is trained.")
-        return
     
     elif not model_result['success']:
         st.error(f"Model error: {model_result.get('error', 'Unknown error')}")
@@ -428,112 +450,113 @@ def show_ml_predictions():
         st.info("No performance metrics available.")
         st.markdown("#### Current Market Prediction")
         st.info("No predictions available.")
-        # Skip the rest of the prediction logic
-        return
+        # Skip the rest of the prediction logic - don't return
     
     # Only show these sections if model was successful
-    # Add S&P 500 Price Forecast
-    st.markdown("### S&P 500 Price Forecast")
-    
-    # Create forecast chart
-    forecast_days_options = {
-        "7 Days": 7,
-        "14 Days": 14,
-        "30 Days": 30,
-        "60 Days": 60,
-        "90 Days": 90
-    }
-    
-    forecast_col1, forecast_col2 = st.columns([4, 1])
-    
-    with forecast_col2:
-        st.markdown("<br>", unsafe_allow_html=True)  # Add some space
-        forecast_days = st.selectbox(
-            "Forecast Period",
-            list(forecast_days_options.keys()),
-            index=2  # Default to 30 days
-        )
-        days_to_forecast = forecast_days_options[forecast_days]
-    
-    with forecast_col1:
-        # Prepare features for forecasting
-        current_data, features = prepare_features(
-            st.session_state.data,
-            focus_on_drops=False  # Don't filter for forecasting
-        )
+    if model_result is not None and model_result.get('success', False):
+        # Add S&P 500 Price Forecast
+        st.markdown("### S&P 500 Price Forecast")
         
-        forecast_chart = create_forecast_chart(
-            model_result,
-            st.session_state.data,
-            features,
-            days_to_forecast=days_to_forecast,
-            title=f"S&P 500 {forecast_days} Price Forecast (Machine Learning Prediction)"
-        )
-        st.plotly_chart(forecast_chart, use_container_width=True)
-    
-    # Add description of forecast
-    st.markdown("""
-    **About this forecast:**
-    
-    This machine learning forecast is based on the trained model's predictions of future returns. 
-    The forecast shows the expected price trajectory with a confidence interval (shaded area) 
-    derived from the model's prediction error. This is for educational purposes only and should not 
-    be used as financial advice.
-    """)
-    
-    st.markdown("---")
-    
-    # Model performance metrics
-    st.markdown("#### Model Performance")
-    
-    metrics = model_result['metrics']
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric(
-            "Mean Absolute Error (Test)", 
-            f"{metrics['mae_test']:.2f}%",
-            delta=f"{metrics['mae_train']:.2f}% (train)",
-            delta_color="inverse"  # Lower MAE is better
-        )
-    
-    with col2:
-        st.metric(
-            "Root Mean Squared Error (Test)", 
-            f"{metrics['rmse_test']:.2f}%",
-            delta=f"{metrics['rmse_train']:.2f}% (train)",
-            delta_color="inverse"  # Lower RMSE is better
-        )
-    
-    with col3:
-        st.metric(
-            "R² Score (Test)", 
-            f"{metrics['r2_test']:.3f}",
-            delta=f"{metrics['r2_train']:.3f} (train)",
-            delta_color="normal"  # Higher R² is better
-        )
+        # Create forecast chart
+        forecast_days_options = {
+            "7 Days": 7,
+            "14 Days": 14,
+            "30 Days": 30,
+            "60 Days": 60,
+            "90 Days": 90
+        }
+        
+        forecast_col1, forecast_col2 = st.columns([4, 1])
+        
+        with forecast_col2:
+            st.markdown("<br>", unsafe_allow_html=True)  # Add some space
+            forecast_days = st.selectbox(
+                "Forecast Period",
+                list(forecast_days_options.keys()),
+                index=2  # Default to 30 days
+            )
+            days_to_forecast = forecast_days_options[forecast_days]
+        
+        with forecast_col1:
+            # Prepare features for forecasting
+            current_data, features = prepare_features(
+                st.session_state.data,
+                focus_on_drops=False  # Don't filter for forecasting
+            )
+            
+            forecast_chart = create_forecast_chart(
+                model_result,
+                st.session_state.data,
+                features,
+                days_to_forecast=days_to_forecast,
+                title=f"S&P 500 {forecast_days} Price Forecast (Machine Learning Prediction)"
+            )
+            st.plotly_chart(forecast_chart, use_container_width=True)
+        
+        # Add description of forecast
+        st.markdown("""
+        **About this forecast:**
+        
+        This machine learning forecast is based on the trained model's predictions of future returns. 
+        The forecast shows the expected price trajectory with a confidence interval (shaded area) 
+        derived from the model's prediction error. This is for educational purposes only and should not 
+        be used as financial advice.
+        """)
+        
+        st.markdown("---")
+        
+        # Model performance metrics
+        st.markdown("#### Model Performance")
+        
+        metrics = model_result.get('metrics', {})
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric(
+                "Mean Absolute Error (Test)", 
+                f"{metrics.get('mae_test', 0):.2f}%",
+                delta=f"{metrics.get('mae_train', 0):.2f}% (train)",
+                delta_color="inverse"  # Lower MAE is better
+            )
+        
+        with col2:
+            st.metric(
+                "Root Mean Squared Error (Test)", 
+                f"{metrics.get('rmse_test', 0):.2f}%",
+                delta=f"{metrics.get('rmse_train', 0):.2f}% (train)",
+                delta_color="inverse"  # Lower RMSE is better
+            )
+        
+        with col3:
+            st.metric(
+                "R² Score (Test)", 
+                f"{metrics.get('r2_test', 0):.3f}",
+                delta=f"{metrics.get('r2_train', 0):.3f} (train)",
+                delta_color="normal"  # Higher R² is better
+            )
     
     # Visualize model predictions vs actual returns
-    st.markdown("#### Prediction Performance")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Prediction vs actual scatter plot
-        pred_chart = create_prediction_chart(
-            model_result, 
-            title=f"Model Predictions vs Actual {target_period} Returns"
-        )
-        st.plotly_chart(pred_chart, use_container_width=True)
-    
-    with col2:
-        # Feature importance chart
-        feat_chart = create_feature_importance_chart(
-            model_result, 
-            title="Feature Importance"
-        )
-        st.plotly_chart(feat_chart, use_container_width=True)
+    if model_result is not None and model_result.get('success', False):
+        st.markdown("#### Prediction Performance")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Prediction vs actual scatter plot
+            pred_chart = create_prediction_chart(
+                model_result, 
+                title=f"Model Predictions vs Actual {target_period} Returns"
+            )
+            st.plotly_chart(pred_chart, use_container_width=True)
+        
+        with col2:
+            # Feature importance chart
+            feat_chart = create_feature_importance_chart(
+                model_result, 
+                title="Feature Importance"
+            )
+            st.plotly_chart(feat_chart, use_container_width=True)
     
     # Add drop events analysis from model training data
     if 'drop_training_data' in st.session_state and focus_on_drops:
@@ -658,92 +681,98 @@ def show_ml_predictions():
     # Current market prediction
     st.markdown("#### Current Market Prediction")
     
-    # Prepare features for current data - make sure to use same settings as the trained model
-    current_data, features = prepare_features(
-        st.session_state.data,
-        focus_on_drops=False  # Don't filter current data, just prepare features
-    )
-    
-    if current_data.empty:
-        st.warning("Insufficient data to make predictions for current market conditions.")
-        # Add empty state display instead of returning
-        st.markdown("""
-        #### Unable to Make Current Prediction
-        
-        The application does not have enough data to make predictions for the current market conditions.
-        Please adjust the date range or try a different model configuration.
-        """)
-        # Display a placeholder for the prediction section
-        st.markdown("""
-        #### No Current Prediction Available
-        
-        Try expanding your date range or adjusting your model parameters to enable predictions.
-        """)
-        return  # Skip remaining prediction display logic
-    
-    # Make prediction for the latest data point
-    prediction = predict_returns(model_result, current_data, features)
-    
-    if prediction is not None:
-        # Determine color based on prediction
-        if prediction > 0:
-            prediction_color = "green"
-        else:
-            prediction_color = "red"
-        
-        # Create a styled card for the prediction
-        st.markdown(
-            f"""
-            <div style="border:1px solid {prediction_color}; border-radius:5px; padding:20px; background-color:rgba({0 if prediction_color == 'green' else 255}, {128 if prediction_color == 'green' else 0}, 0, 0.1); text-align:center; margin-bottom:20px;">
-                <h3 style="margin:0; color:{prediction_color};">Predicted {target_period} Return</h3>
-                <div style="font-size:48px; font-weight:bold; margin:10px 0; color:{prediction_color};">{prediction:.2f}%</div>
-                <p style="margin:0; font-size:14px;">Based on current market conditions using {model_type.replace('_', ' ').title()}</p>
-            </div>
-            """,
-            unsafe_allow_html=True
+    # Check if model_result exists and is valid before proceeding
+    if model_result is not None and model_result.get('success', False):
+        # Prepare features for current data - make sure to use same settings as the trained model
+        current_data, features = prepare_features(
+            st.session_state.data,
+            focus_on_drops=False  # Don't filter current data, just prepare features
         )
         
-        # Confidence interval explanation
-        st.markdown("""
-        #### Prediction Interpretation
-        
-        The prediction shown is a point estimate based on current market conditions. Actual returns 
-        can vary significantly due to unforeseen events and market conditions. Here's how to interpret 
-        this prediction:
-        
-        - This prediction represents the expected return over the next {period}, not a guaranteed outcome.
-        - The model is trained on historical data and past relationships between technical indicators and returns.
-        - Market conditions outside the training data range may lead to less accurate predictions.
-        - Always combine this prediction with other analysis tools and your own judgment.
-        """.replace("{period}", target_period))
-        
-        # Prediction confidence based on model metrics
-        r2 = metrics['r2_test']
-        rmse = metrics['rmse_test']
-        
-        # Simple confidence assessment based on R²
-        if r2 > 0.3:
-            confidence = "High"
-            confidence_color = "green"
-        elif r2 > 0.1:
-            confidence = "Medium"
-            confidence_color = "orange"
+        if current_data.empty:
+            st.warning("Insufficient data to make predictions for current market conditions.")
+            # Add empty state display instead of returning
+            st.markdown("""
+            #### Unable to Make Current Prediction
+            
+            The application does not have enough data to make predictions for the current market conditions.
+            Please adjust the date range or try a different model configuration.
+            """)
+            # Display a placeholder for the prediction section
+            st.markdown("""
+            #### No Current Prediction Available
+            
+            Try expanding your date range or adjusting your model parameters to enable predictions.
+            """)
+            # Continue to rest of the page - don't return
         else:
-            confidence = "Low"
-            confidence_color = "red"
-        
-        st.markdown(
-            f"""
-            <div style="border:1px solid {confidence_color}; border-radius:5px; padding:10px; background-color:rgba({0 if confidence_color == 'green' else (255 if confidence_color == 'red' else 255)}, {128 if confidence_color == 'green' else (0 if confidence_color == 'red' else 165)}, 0, 0.1);">
-                <h4 style="margin:0; color:{confidence_color};">Prediction Confidence: {confidence}</h4>
-                <p style="margin:5px 0; font-size:12px;">
-                    Based on model R² score of {r2:.3f} and RMSE of {rmse:.2f}%.<br>
-                    The actual return is likely to be within ±{(rmse * 1.96):.2f}% of the prediction (95% confidence interval).
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+            # Continue with prediction logic for valid data
+            # This section will only execute if we have a valid model and data
+            metrics = model_result.get('metrics', {})
+            
+            # Make prediction for the latest data point
+            prediction = predict_returns(model_result, current_data, features)
+            
+            if prediction is not None:
+                # Determine color based on prediction
+                if prediction > 0:
+                    prediction_color = "green"
+                else:
+                    prediction_color = "red"
+                
+                # Create a styled card for the prediction
+                st.markdown(
+                    f"""
+                    <div style="border:1px solid {prediction_color}; border-radius:5px; padding:20px; background-color:rgba({0 if prediction_color == 'green' else 255}, {128 if prediction_color == 'green' else 0}, 0, 0.1); text-align:center; margin-bottom:20px;">
+                        <h3 style="margin:0; color:{prediction_color};">Predicted {target_period} Return</h3>
+                        <div style="font-size:48px; font-weight:bold; margin:10px 0; color:{prediction_color};">{prediction:.2f}%</div>
+                        <p style="margin:0; font-size:14px;">Based on current market conditions using {model_type.replace('_', ' ').title()}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                
+                # Confidence interval explanation
+                st.markdown("""
+                #### Prediction Interpretation
+                
+                The prediction shown is a point estimate based on current market conditions. Actual returns 
+                can vary significantly due to unforeseen events and market conditions. Here's how to interpret 
+                this prediction:
+                
+                - This prediction represents the expected return over the next {period}, not a guaranteed outcome.
+                - The model is trained on historical data and past relationships between technical indicators and returns.
+                - Market conditions outside the training data range may lead to less accurate predictions.
+                - Always combine this prediction with other analysis tools and your own judgment.
+                """.replace("{period}", target_period))
+                
+                # Prediction confidence based on model metrics
+                r2 = metrics.get('r2_test', 0)
+                rmse = metrics.get('rmse_test', 0)
+                
+                # Simple confidence assessment based on R²
+                if r2 > 0.3:
+                    confidence = "High"
+                    confidence_color = "green"
+                elif r2 > 0.1:
+                    confidence = "Medium"
+                    confidence_color = "orange"
+                else:
+                    confidence = "Low"
+                    confidence_color = "red"
+                
+                st.markdown(
+                    f"""
+                    <div style="border:1px solid {confidence_color}; border-radius:5px; padding:10px; background-color:rgba({0 if confidence_color == 'green' else (255 if confidence_color == 'red' else 255)}, {128 if confidence_color == 'green' else (0 if confidence_color == 'red' else 165)}, 0, 0.1);">
+                        <h4 style="margin:0; color:{confidence_color};">Prediction Confidence: {confidence}</h4>
+                        <p style="margin:5px 0; font-size:12px;">
+                            Based on model R² score of {r2:.3f} and RMSE of {rmse:.2f}%.<br>
+                            The actual return is likely to be within ±{(rmse * 1.96):.2f}% of the prediction (95% confidence interval).
+                        </p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
     else:
         st.warning("Unable to make a prediction for current market conditions.")
     
