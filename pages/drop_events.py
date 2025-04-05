@@ -263,76 +263,76 @@ def show_drop_events():
             # Consecutive day drop - show table with data for each day
             start_date = selected_event['start_date']
             end_date = selected_event['date']
-        
-        if start_date in st.session_state.data.index and end_date in st.session_state.data.index:
-            period_data = st.session_state.data.loc[start_date:end_date].copy()
             
-            # Create a DataFrame with the relevant information
-            price_data = pd.DataFrame({
-                'Date': period_data.index,
-                'Open': period_data['Open'],
-                'High': period_data['High'],
-                'Low': period_data['Low'],
-                'Close': period_data['Close'],
-                'Daily Change (%)': period_data['Return'],
-                'Volume': period_data['Volume'],
-                'Volume vs Avg': period_data['Volume'] / period_data['Avg_Vol_50'] if 'Avg_Vol_50' in period_data.columns else None
-            })
-            
-            # Format the DataFrame
-            price_data['Date'] = price_data['Date'].dt.strftime('%Y-%m-%d')
-            
-            # Function to apply color formatting
-            def color_negative_red(val, props=''):
-                if isinstance(val, (int, float)) and props.startswith('Daily Change'):
-                    if val < 0:
-                        return 'color: red'
-                return ''
-            
-            # Apply styling with smaller font and decimal formatting
-            styled_price_data = price_data.style.format({
-                'Open': '${:.2f}',
-                'High': '${:.2f}',
-                'Low': '${:.2f}',
-                'Close': '${:.2f}',
-                'Daily Change (%)': '{:.1f}%',
-                'Volume': '{:,.0f}',
-                'Volume vs Avg': '{:.1f}x'
-            })
-            
-            # Add custom CSS for smaller font and more compact layout
-            styled_price_data = styled_price_data.set_table_styles([
-                {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]},
-                {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]}
-            ])
-            
-            # Apply color formatting using map (replacing deprecated applymap)
-            styled_price_data = styled_price_data.map(color_negative_red)
-            
-            # Display the table
-            st.dataframe(styled_price_data)
-            
-            # Calculate and show cumulative metrics
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric(
-                    "Starting Price", 
-                    f"${period_data['Open'].iloc[0]:.2f}"
-                )
-            
-            with col2:
-                st.metric(
-                    "Ending Price", 
-                    f"${period_data['Close'].iloc[-1]:.2f}"
-                )
-            
-            with col3:
-                st.metric(
-                    "Total Change", 
-                    f"{((period_data['Close'].iloc[-1] / period_data['Open'].iloc[0]) - 1) * 100:.1f}%",
-                    delta_color="inverse"
-                )
+            if start_date in st.session_state.data.index and end_date in st.session_state.data.index:
+                period_data = st.session_state.data.loc[start_date:end_date].copy()
+                
+                # Create a DataFrame with the relevant information
+                price_data = pd.DataFrame({
+                    'Date': period_data.index,
+                    'Open': period_data['Open'],
+                    'High': period_data['High'],
+                    'Low': period_data['Low'],
+                    'Close': period_data['Close'],
+                    'Daily Change (%)': period_data['Return'],
+                    'Volume': period_data['Volume'],
+                    'Volume vs Avg': period_data['Volume'] / period_data['Avg_Vol_50'] if 'Avg_Vol_50' in period_data.columns else None
+                })
+                
+                # Format the DataFrame
+                price_data['Date'] = price_data['Date'].dt.strftime('%Y-%m-%d')
+                
+                # Function to apply color formatting
+                def color_negative_red(val, props=''):
+                    if isinstance(val, (int, float)) and props.startswith('Daily Change'):
+                        if val < 0:
+                            return 'color: red'
+                    return ''
+                
+                # Apply styling with smaller font and decimal formatting
+                styled_price_data = price_data.style.format({
+                    'Open': '${:.2f}',
+                    'High': '${:.2f}',
+                    'Low': '${:.2f}',
+                    'Close': '${:.2f}',
+                    'Daily Change (%)': '{:.1f}%',
+                    'Volume': '{:,.0f}',
+                    'Volume vs Avg': '{:.1f}x'
+                })
+                
+                # Add custom CSS for smaller font and more compact layout
+                styled_price_data = styled_price_data.set_table_styles([
+                    {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]},
+                    {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]}
+                ])
+                
+                # Apply color formatting using map (replacing deprecated applymap)
+                styled_price_data = styled_price_data.map(color_negative_red)
+                
+                # Display the table
+                st.dataframe(styled_price_data)
+                
+                # Calculate and show cumulative metrics
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        "Starting Price", 
+                        f"${period_data['Open'].iloc[0]:.2f}"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "Ending Price", 
+                        f"${period_data['Close'].iloc[-1]:.2f}"
+                    )
+                
+                with col3:
+                    st.metric(
+                        "Total Change", 
+                        f"{((period_data['Close'].iloc[-1] / period_data['Open'].iloc[0]) - 1) * 100:.1f}%",
+                        delta_color="inverse"
+                    )
         
         # Show recovery chart
         st.markdown("### Recovery Performance")
