@@ -196,10 +196,42 @@ def show_ml_predictions():
             # Select target column - using uppercase for consistency with data_fetcher.py
             target_column = f'Fwd_Ret_{target_period}'
             
-            if target_column not in data.columns:
-                st.error(f"Target column '{target_column}' not found in data.")
+            if data.empty or len(features) == 0:
+                st.error("Insufficient data for ML model training. Try adjusting the drop threshold to include more market events.")
+            elif target_column not in data.columns:
+                available_columns = [col for col in data.columns if col.startswith('Fwd_Ret_')]
+                if available_columns:
+                    # Use a different target column if available
+                    alternative_column = available_columns[0]
+                    st.warning(f"Target column '{target_column}' not found in filtered data. Using '{alternative_column}' instead.")
+                    target_column = alternative_column
+                    
+                    # Train the model with alternative column
+                    model_result = train_model(
+                        data,
+                        features,
+                        target_column,
+                        model_type=model_type,
+                        test_size=test_size
+                    )
+                    
+                    # Store the model in session state with modified target period
+                    # Extract the period from the column name (e.g., 'Fwd_Ret_1M' → '1M')
+                    actual_period = target_column.replace('Fwd_Ret_', '')
+                    st.session_state.ml_models[actual_period] = model_result
+                    st.session_state.drop_training_data = data
+                    
+                    if model_result['success']:
+                        # Count number of drop events
+                        drop_events_count = len(data)
+                        st.success(f"Model trained successfully on {drop_events_count} market drop events for {actual_period} returns instead!")
+                    else:
+                        st.error(f"Model training failed: {model_result.get('error', 'Unknown error')}")
+                else:
+                    st.error(f"No forward return data available. Try adjusting the date range or drop threshold.")
+                    return
             else:
-                # Train the model
+                # Train the model with the requested column
                 model_result = train_model(
                     data, 
                     features, 

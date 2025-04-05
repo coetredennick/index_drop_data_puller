@@ -83,26 +83,36 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         # Count consecutive drop days
         df['Drop_Streak'] = 0
         current_streak = 0
+        streak_values = []
         
+        # First collect all streak values
         for i in range(len(df)):
             if df['Is_Drop_Day'].iloc[i]:
                 current_streak += 1
             else:
                 current_streak = 0
-            df['Drop_Streak'].iloc[i] = current_streak
+            streak_values.append(current_streak)
+        
+        # Then set them all at once to avoid the SettingWithCopyWarning
+        df.loc[:, 'Drop_Streak'] = streak_values
         
         features.append('Drop_Streak')
         
         # Calculate magnitude of drops (cumulative over streaks)
         df['Cumulative_Drop'] = 0
         cumulative = 0
+        cumulative_values = []
         
+        # First collect all values
         for i in range(len(df)):
             if df['Is_Drop_Day'].iloc[i]:
                 cumulative += df['Return'].iloc[i]
             else:
                 cumulative = 0
-            df['Cumulative_Drop'].iloc[i] = cumulative
+            cumulative_values.append(cumulative)
+        
+        # Then set them all at once to avoid the SettingWithCopyWarning
+        df.loc[:, 'Cumulative_Drop'] = cumulative_values
         
         features.append('Cumulative_Drop')
         
@@ -125,7 +135,21 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
             (df['Return'].shift(1) <= drop_threshold) | 
             (df['Drop_Streak'] > 0)
         )
-        df = df[drop_condition].copy()
+        filtered_df = df[drop_condition].copy()
+        
+        # If filtering results in too few data points, use a more relaxed threshold
+        if len(filtered_df) < 30:  # Minimum number for reliable training
+            print(f"Warning: Too few data points ({len(filtered_df)}) with threshold {drop_threshold}%. Using a more relaxed threshold.")
+            relaxed_threshold = max(drop_threshold * 0.5, -1.0)  # More relaxed threshold
+            drop_condition = (
+                (df['Return'] <= relaxed_threshold) | 
+                (df['Return'].shift(1) <= relaxed_threshold) | 
+                (df['Drop_Streak'] > 0)
+            )
+            filtered_df = df[drop_condition].copy()
+            print(f"Relaxed threshold to {relaxed_threshold}%, got {len(filtered_df)} market drop events")
+        
+        df = filtered_df
         print(f"Filtered to {len(df)} market drop events for training")
     
     # Drop NaN values in feature columns
