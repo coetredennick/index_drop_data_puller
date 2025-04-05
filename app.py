@@ -390,12 +390,18 @@ with tab2:
     # Calculate average drop size
     avg_drop = 0
     if st.session_state.drop_events and len(st.session_state.drop_events) > 0:
-        avg_drop = sum(event['drop'] for event in st.session_state.drop_events) / len(st.session_state.drop_events)
+        # Use get() method to safely access 'drop' key or default to 0
+        drops = [event.get('drop', 0) for event in st.session_state.drop_events]
+        if drops:
+            avg_drop = sum(drops) / len(drops)
     
     # Calculate largest drop
     largest_drop = 0
     if st.session_state.drop_events and len(st.session_state.drop_events) > 0:
-        largest_drop = max(event['drop'] for event in st.session_state.drop_events)
+        # Use get() method to safely access 'drop' key or default to 0
+        drops = [event.get('drop', 0) for event in st.session_state.drop_events]
+        if drops:
+            largest_drop = max(drops)
     
     with metrics_col1:
         st.metric("Single Day Drop Events", total_drops)
@@ -429,18 +435,25 @@ with tab2:
         events_data = []
         for event in all_events:
             if 'consecutive' in event and event['consecutive']:
+                # Use get() method for all keys to avoid KeyError
+                start_date = event.get('start_date', 'N/A')
+                end_date = event.get('end_date', 'N/A')
+                total_drop = event.get('total_drop', 0.0)
+                days = event.get('days', 0)
+                
                 events_data.append({
                     'Event Type': 'Consecutive',
-                    'Date': f"{event['start_date']} to {event['end_date']}",
-                    'Drop (%)': f"{event['total_drop']:.2f}%",
-                    'Days': event['days'],
+                    'Date': f"{start_date} to {end_date}",
+                    'Drop (%)': f"{total_drop:.2f}%",
+                    'Days': days,
                     'Severity': event.get('severity', 'N/A')
                 })
             else:
+                drop_value = event.get('drop', 0.0)
                 events_data.append({
                     'Event Type': 'Single Day',
-                    'Date': event['date'],
-                    'Drop (%)': f"{event['drop']:.2f}%",
+                    'Date': event.get('date', 'N/A'),
+                    'Drop (%)': f"{drop_value:.2f}%",
                     'Days': 1,
                     'Severity': event.get('severity', 'N/A')
                 })
@@ -469,11 +482,17 @@ with tab2:
                 # Calculate the forward returns for each event
                 returns = []
                 for event in all_events:
-                    event_date = pd.to_datetime(event['date'] if 'date' in event else event['end_date'])
-                    if event_date in st.session_state.data.index and col_name in st.session_state.data.columns:
-                        ret = st.session_state.data.loc[event_date, col_name]
-                        if pd.notna(ret):
-                            returns.append(ret)
+                    try:
+                        date_str = event.get('date') if 'date' in event else event.get('end_date')
+                        if date_str and st.session_state.data is not None:
+                            event_date = pd.to_datetime(date_str)
+                            if event_date in st.session_state.data.index and col_name in st.session_state.data.columns:
+                                ret = st.session_state.data.loc[event_date, col_name]
+                                if pd.notna(ret):
+                                    returns.append(ret)
+                    except (ValueError, TypeError, KeyError):
+                        # Skip this event if date conversion fails
+                        continue
                 
                 # Calculate average return for this period
                 if returns:
@@ -506,9 +525,15 @@ with tab2:
             month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
             
             for event in all_events:
-                event_date = pd.to_datetime(event['date'] if 'date' in event else event['start_date'])
-                month_idx = event_date.month - 1
-                monthly_drops[month_idx] += 1
+                try:
+                    date_str = event.get('date') if 'date' in event else event.get('start_date')
+                    if date_str:
+                        event_date = pd.to_datetime(date_str)
+                        month_idx = event_date.month - 1
+                        monthly_drops[month_idx] += 1
+                except (ValueError, TypeError, KeyError):
+                    # Skip this event if date conversion fails
+                    continue
             
             # Create dataframe for monthly distribution
             monthly_df = pd.DataFrame({
