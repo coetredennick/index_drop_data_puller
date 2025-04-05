@@ -16,40 +16,12 @@ from pages.drop_events import show_drop_events
 from pages.current_market import show_current_market
 from pages.ml_predictions import show_ml_predictions
 
-# Configure the page with completely removed sidebar
+# Configure the page
 st.set_page_config(
     page_title="S&P 500 Market Drop Analyzer",
     page_icon="📉",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-    menu_items={}
+    layout="wide"
 )
-
-# Use inline CSS only to hide sidebar (simpler approach)
-st.markdown("""
-<style>
-/* PERMANENT REMOVAL of sidebar and ALL related elements */
-[data-testid="stSidebar"],
-[data-testid="baseButton-headerNoPadding"],
-section[data-testid="stSidebar"],
-button[kind="header"],
-span[data-testid="collapsedControl"],
-[data-testid="expandedControl"],
-header button:first-child,
-header [data-testid="baseButton-headerNoPadding"],
-div:has(> [data-testid="stSidebar"]) {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    height: 0 !important;
-    width: 0 !important;
-    pointer-events: none !important;
-    position: absolute !important;
-    top: -9999px !important;
-    left: -9999px !important;
-}
-</style>
-""", unsafe_allow_html=True)
 
 # Add CSS for clean, modern financial dashboard design
 st.markdown("""
@@ -66,37 +38,29 @@ st.markdown("""
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
-    /* COMPLETE REMOVAL of sidebar and ALL related elements */
-    [data-testid="stSidebar"],
-    [data-testid="baseButton-headerNoPadding"],
-    section[data-testid="stSidebar"],
-    button[kind="header"],
-    span[data-testid="collapsedControl"],
-    [data-testid="expandedControl"],
-    header button:first-child,
-    header [data-testid="baseButton-headerNoPadding"],
-    div:has(> [data-testid="stSidebar"]),
-    .css-14xtw13 e8zbici0,
-    .css-9s5bis {
+    /* Hide the default Streamlit navigation sidebar and all related elements */
+    section[data-testid="stSidebar"] {
+        display: none !important;
+    }
+    
+    /* Hide the hamburger menu that shows the navigation sidebar - stronger selector */
+    header[data-testid="stHeader"] > div:first-child > div:first-child {
+        display: none !important;
+    }
+    
+    /* Hide the hamburger menu completely */
+    button[kind="header"], 
+    *[data-testid="collapsedControl"],
+    *[data-testid="expandedControl"] {
         display: none !important;
         visibility: hidden !important;
         opacity: 0 !important;
         height: 0 !important;
         width: 0 !important;
         pointer-events: none !important;
-        position: absolute !important;
-        top: -9999px !important;
-        left: -9999px !important;
     }
     
-    /* Force full width main content and remove all sidebar traces */
-    .main .block-container {
-        max-width: 100% !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-    }
-    
-    /* Clean up left padding on header too */
+    /* Clean up left padding now that the sidebar toggle is gone */
     header[data-testid="stHeader"] {
         padding-left: 1rem !important;
     }
