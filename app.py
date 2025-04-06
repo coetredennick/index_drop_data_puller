@@ -11,8 +11,6 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from utils.data_fetcher import fetch_sp500_data, cache_data
 from utils.technical_indicators import calculate_technical_indicators
 from utils.event_detection import detect_drop_events, detect_consecutive_drops
-from pages.current_market import show_current_market
-from pages.drop_events import show_drop_events
 from pages.historical_performance import show_historical_performance
 from pages.ml_predictions_new import show_ml_predictions
 
@@ -316,8 +314,6 @@ with st.spinner("Fetching S&P 500 data..."):
 
 # Create tabs with icons for better visual organization
 tabs = st.tabs([
-    "📊 Current Market",
-    "🔍 Drop Events",
     "📈 Historical Performance", 
     "🤖 ML Predictions"
 ])
@@ -327,15 +323,9 @@ st.markdown('<hr style="margin-top: 0; margin-bottom: 15px; border: none; height
 
 # Populate tabs with content
 with tabs[0]:
-    show_current_market()
-
-with tabs[1]:
-    show_drop_events()
-
-with tabs[2]:
     show_historical_performance()
 
-with tabs[3]:
+with tabs[1]:
     show_ml_predictions()
 
 # Add footer
