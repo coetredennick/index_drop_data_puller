@@ -179,109 +179,11 @@ def show_historical_performance():
     # Detailed Return Database (now combined with aggregates)
     st.markdown("### Market Drop Return Database with Aggregates")
     
-    # First, create aggregate entries to add to the table
-    aggregate_rows = []
-    
-    # Add overall aggregate statistics
-    aggregate_rows.append({
-        'Date': 'ALL EVENTS',
-        'Type': f'Total: {len(all_events)}',
-        'Drop (%)': '-',
-        'Severity': 'AVERAGE',
-        '1W (%)': agg_metrics['1W']['avg'] if '1W' in agg_metrics else None,
-        '1M (%)': agg_metrics['1M']['avg'] if '1M' in agg_metrics else None,
-        '3M (%)': agg_metrics['3M']['avg'] if '3M' in agg_metrics else None,
-        '6M (%)': agg_metrics['6M']['avg'] if '6M' in agg_metrics else None,
-        '1Y (%)': agg_metrics['1Y']['avg'] if '1Y' in agg_metrics else None,
-        '3Y (%)': agg_metrics['3Y']['avg'] if '3Y' in agg_metrics else None
-    })
-    
-    aggregate_rows.append({
-        'Date': 'ALL EVENTS',
-        'Type': f'Total: {len(all_events)}',
-        'Drop (%)': '-',
-        'Severity': 'MEDIAN',
-        '1W (%)': agg_metrics['1W']['med'] if '1W' in agg_metrics else None,
-        '1M (%)': agg_metrics['1M']['med'] if '1M' in agg_metrics else None,
-        '3M (%)': agg_metrics['3M']['med'] if '3M' in agg_metrics else None,
-        '6M (%)': agg_metrics['6M']['med'] if '6M' in agg_metrics else None,
-        '1Y (%)': agg_metrics['1Y']['med'] if '1Y' in agg_metrics else None,
-        '3Y (%)': agg_metrics['3Y']['med'] if '3Y' in agg_metrics else None
-    })
-    
-    aggregate_rows.append({
-        'Date': 'ALL EVENTS',
-        'Type': f'Total: {len(all_events)}',
-        'Drop (%)': '-',
-        'Severity': 'MIN',
-        '1W (%)': agg_metrics['1W']['min'] if '1W' in agg_metrics else None,
-        '1M (%)': agg_metrics['1M']['min'] if '1M' in agg_metrics else None,
-        '3M (%)': agg_metrics['3M']['min'] if '3M' in agg_metrics else None,
-        '6M (%)': agg_metrics['6M']['min'] if '6M' in agg_metrics else None,
-        '1Y (%)': agg_metrics['1Y']['min'] if '1Y' in agg_metrics else None,
-        '3Y (%)': agg_metrics['3Y']['min'] if '3Y' in agg_metrics else None
-    })
-    
-    aggregate_rows.append({
-        'Date': 'ALL EVENTS',
-        'Type': f'Total: {len(all_events)}',
-        'Drop (%)': '-',
-        'Severity': 'MAX',
-        '1W (%)': agg_metrics['1W']['max'] if '1W' in agg_metrics else None,
-        '1M (%)': agg_metrics['1M']['max'] if '1M' in agg_metrics else None,
-        '3M (%)': agg_metrics['3M']['max'] if '3M' in agg_metrics else None,
-        '6M (%)': agg_metrics['6M']['max'] if '6M' in agg_metrics else None,
-        '1Y (%)': agg_metrics['1Y']['max'] if '1Y' in agg_metrics else None,
-        '3Y (%)': agg_metrics['3Y']['max'] if '3Y' in agg_metrics else None
-    })
-    
-    aggregate_rows.append({
-        'Date': 'ALL EVENTS',
-        'Type': f'Total: {len(all_events)}',
-        'Drop (%)': '-',
-        'Severity': 'POSITIVE %',
-        '1W (%)': agg_metrics['1W']['pos_pct'] if '1W' in agg_metrics else None,
-        '1M (%)': agg_metrics['1M']['pos_pct'] if '1M' in agg_metrics else None,
-        '3M (%)': agg_metrics['3M']['pos_pct'] if '3M' in agg_metrics else None,
-        '6M (%)': agg_metrics['6M']['pos_pct'] if '6M' in agg_metrics else None,
-        '1Y (%)': agg_metrics['1Y']['pos_pct'] if '1Y' in agg_metrics else None,
-        '3Y (%)': agg_metrics['3Y']['pos_pct'] if '3Y' in agg_metrics else None
-    })
-    
-    # Add severity-based aggregate statistics
-    for severity in severity_order:
-        if severity in severity_metrics:
-            metrics = severity_metrics[severity]
-            aggregate_rows.append({
-                'Date': f'{severity.upper()}',
-                'Type': f'Total: {metrics["count"]}',
-                'Drop (%)': '-',
-                'Severity': severity,
-                '1W (%)': metrics.get('1W_avg'),
-                '1M (%)': metrics.get('1M_avg'),
-                '3M (%)': metrics.get('3M_avg'),
-                '6M (%)': metrics.get('6M_avg'),
-                '1Y (%)': metrics.get('1Y_avg'),
-                '3Y (%)': metrics.get('3Y_avg')
-            })
-    
-    # Add a separator row
-    aggregate_rows.append({
-        'Date': '----------',
-        'Type': '----------',
-        'Drop (%)': '----------',
-        'Severity': '----------',
-        '1W (%)': None,
-        '1M (%)': None,
-        '3M (%)': None,
-        '6M (%)': None,
-        '1Y (%)': None,
-        '3Y (%)': None
-    })
-    
-    # Prepare data for individual events
-    event_rows = [
-        {
+    # Create a simple database table with totals at the top
+    # Prepare individual event data first
+    event_rows = []
+    for event in all_events:
+        row = {
             'Date': event['date'].strftime('%Y-%m-%d'),
             'Type': 'Single Day' if event['type'] == 'single_day' else f'Consecutive ({event["num_days"]} days)',
             'Drop (%)': event['drop_pct'] if event['type'] == 'single_day' else event['cumulative_drop'],
@@ -293,22 +195,34 @@ def show_historical_performance():
             '1Y (%)': event.get('fwd_return_1y', None),
             '3Y (%)': event.get('fwd_return_3y', None)
         }
-        for event in all_events
-    ]
+        event_rows.append(row)
     
-    # Combine aggregate and event data
-    combined_rows = aggregate_rows + event_rows
-    events_df = pd.DataFrame(combined_rows)
+    # Create DataFrame for events
+    events_df = pd.DataFrame(event_rows)
     
-    # Sort events by date (newest first) but keep aggregates at the top
-    if not events_df.empty:
-        # Create a helper column for sorting
-        events_df['sort_key'] = events_df.apply(
-            lambda x: '0' if x['Date'] in ['ALL EVENTS', '----------'] or x['Date'].startswith(('SEVERE', 'MAJOR', 'SIGNIFICANT', 'MINOR')) 
-            else '1' + x['Date'], axis=1
-        )
-        events_df = events_df.sort_values('sort_key')
-        events_df = events_df.drop('sort_key', axis=1)
+    # Add totals row if we have data
+    if len(events_df) > 0:
+        # Calculate totals/averages for numeric columns
+        totals_row = {
+            'Date': 'TOTALS',
+            'Type': f'{len(events_df)} Events',
+            'Drop (%)': events_df['Drop (%)'].mean(),
+            'Severity': 'All Types',
+        }
+        
+        # For each return period, calculate average
+        for period in ['1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)']:
+            totals_row[period] = events_df[period].mean()
+            
+        # Add totals row at top
+        events_df = pd.concat([pd.DataFrame([totals_row]), events_df], ignore_index=True)
+        
+    # Sort the rest by date (newest first)
+    if len(events_df) > 1:  # If we have more than just the totals row
+        # Create a mask for all rows except the first (totals) row
+        mask = events_df.index > 0
+        # Sort all rows except the totals row
+        events_df.loc[mask] = events_df.loc[mask].sort_values('Date', ascending=False).values
     
     # Function to apply color formatting for the detailed database
     def color_cell(val):
@@ -345,13 +259,9 @@ def show_historical_performance():
         elif val == 'POSITIVE %':
             return 'background-color: rgba(0, 128, 0, 0.7); color: white; font-weight: bold'
         
-        # For aggregate header rows
-        if val == 'ALL EVENTS' or val.startswith(('SEVERE', 'MAJOR', 'SIGNIFICANT', 'MINOR')):
+        # For totals row
+        if val == 'TOTALS' or val == 'All Types':
             return 'background-color: #333333; color: white; font-weight: bold'
-        
-        # For separator row
-        if val == '----------':
-            return 'background-color: #cccccc'
             
         return ''
     
