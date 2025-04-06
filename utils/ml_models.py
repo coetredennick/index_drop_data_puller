@@ -151,10 +151,20 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         # First collect all values
         for i in range(len(df)):
             if df['Is_Drop_Day'].iloc[i]:
-                cumulative += float(df['Return'].iloc[i])
+                # Make sure we're using floats for the return value
+                try:
+                    curr_return = float(df['Return'].iloc[i])
+                    cumulative += curr_return
+                except (ValueError, TypeError):
+                    # If there's a problem converting to float, use 0
+                    print(f"Warning: Could not convert return value to float at index {i}")
+                    cumulative += 0
             else:
                 cumulative = 0
             cumulative_values.append(float(cumulative))
+        
+        # Convert all values to float64 explicitly before assignment
+        cumulative_values = [float(val) for val in cumulative_values]
         
         # Then set them all at once to avoid the SettingWithCopyWarning
         df.loc[:, 'Cumulative_Drop'] = cumulative_values
@@ -168,7 +178,8 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         # Count number of drop days in recent periods
         for window in [5, 10, 20]:
             if len(df) > window:
-                df[f'Drop_Days_{window}'] = df['Is_Drop_Day'].rolling(window=window).sum()
+                # Make sure we're getting a numeric value by explicitly converting to float
+                df[f'Drop_Days_{window}'] = df['Is_Drop_Day'].rolling(window=window).sum().astype(float)
                 features.append(f'Drop_Days_{window}')
     
     print(f"Created {len(features)} features for ML model")
@@ -340,16 +351,33 @@ def predict_returns(model_result, current_data, features):
     if not model_result['success']:
         return None
     
-    # Extract the model
-    model = model_result['model']
-    
-    # Prepare current data
-    current_features = current_data[features].iloc[-1].values.reshape(1, -1)
-    
-    # Make prediction
-    prediction = model.predict(current_features)[0]
-    
-    return prediction
+    try:
+        # Print information about the prediction data
+        print(f"Making prediction with model {model_result.get('model_type', 'Unknown')} for target {model_result.get('target_column', 'Unknown')}")
+        print(f"Using {len(features)} features for prediction")
+        
+        # Extract the model
+        model = model_result['model']
+        
+        # Ensure all feature values are properly converted to float
+        # This prevents data type issues during prediction
+        feature_data = current_data[features].copy()
+        for col in features:
+            feature_data[col] = feature_data[col].astype(float)
+        
+        # Prepare current data
+        current_features = feature_data.iloc[-1].values.reshape(1, -1)
+        
+        # Make prediction and convert to float
+        prediction = float(model.predict(current_features)[0])
+        print(f"Raw prediction value: {prediction}")
+        
+        return prediction
+    except Exception as e:
+        import traceback
+        print(f"Error in predict_returns: {str(e)}")
+        print(traceback.format_exc())
+        return None
 
 def create_prediction_chart(model_result, title="Model Predictions vs Actual Returns", height=400):
     """
