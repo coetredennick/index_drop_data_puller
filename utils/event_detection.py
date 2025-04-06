@@ -58,28 +58,28 @@ def detect_drop_events(data, threshold_pct):
 
 def detect_consecutive_drops(data, threshold_pct, num_days):
     """
-    Detect consecutive days of drops in the S&P 500
+    Detect consecutive days of drops in the S&P 500 where EACH day meets or exceeds the threshold
     
     Parameters:
     -----------
     data : pandas.DataFrame
         DataFrame containing S&P 500 historical data with 'Close' and 'Return' columns
     threshold_pct : float
-        Minimum percentage drop for each day to be considered
+        Minimum percentage drop for EACH day to be considered (positive number)
     num_days : int
         Number of consecutive days required
         
     Returns:
     --------
     list
-        List of consecutive drop events with dates and magnitudes
+        List of consecutive drop events with dates and magnitudes where every day drops by at least threshold_pct
     """
     import pandas as pd
     import numpy as np
     import streamlit as st
     
     # Print debug info
-    print(f"Detecting consecutive drops with threshold: {threshold_pct}% and {num_days} days")
+    print(f"Detecting consecutive drops with threshold: {threshold_pct}% for EACH day over {num_days} consecutive days")
     
     if num_days < 2:
         return []
@@ -107,22 +107,22 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
         end_price = window.iloc[-1]['Close']
         price_change_pct = (end_price / start_price - 1) * 100
         
-        # For a window to be a valid consecutive drop:
-        # 1. The total price change must be a drop at least as large as threshold * num_days * 0.6
-        # 2. At least half of the days must have drops of at least threshold
+        # NEW LOGIC: For a window to be a valid consecutive drop:
+        # 1. EVERY day must have a drop at least as large as the threshold
+        # 2. The total cumulative drop must be at least threshold * num_days
         
         # Calculate minimum required drop for this window
-        min_required_drop = -threshold_pct * num_days * 0.6
+        min_required_drop = -threshold_pct * num_days
         
-        # Count days with significant drops
-        drop_days = sum(window['Return'] <= -threshold_pct)
+        # Check if ALL days meet the threshold requirement
+        all_days_meet_threshold = all(day_return <= -threshold_pct for day_return in window['Return'])
         
         # Only consider this a valid consecutive drop if:
-        # 1. The price dropped significantly overall
-        # 2. At least half the days had significant drops
-        # 3. The price change wasn't too extreme (to filter out data errors)
-        if (price_change_pct <= min_required_drop and 
-            drop_days >= num_days * 0.5 and 
+        # 1. ALL days have drops meeting or exceeding the threshold
+        # 2. The cumulative price change meets the required minimum
+        # 3. The price change isn't too extreme (to filter out data errors)
+        if (all_days_meet_threshold and
+            price_change_pct <= min_required_drop and 
             price_change_pct > -50):  # Sanity check
             
             # Create the event
@@ -174,7 +174,7 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
     filtered_events.sort(key=lambda x: x['date'], reverse=True)
     
     # Print debug info
-    print(f"Found {len(filtered_events)} valid consecutive drop events for {num_days} days and {threshold_pct}% threshold")
+    print(f"Found {len(filtered_events)} valid consecutive drop events where EACH of {num_days} days dropped by at least {threshold_pct}%")
     
     return filtered_events
 
@@ -250,4 +250,5 @@ def get_event_label(event):
         return f"{date_str}: {event['severity']} Drop ({event['drop_pct']:.2f}%)"
     else:
         start_date = event['start_date'].strftime('%Y-%m-%d')
-        return f"{start_date} to {date_str}: {event['severity']} Drop ({event['cumulative_drop']:.2f}% over {event['num_days']} days)"
+        threshold = abs(event['cumulative_drop'] / event['num_days'])
+        return f"{start_date} to {date_str}: {event['severity']} Drop ({event['cumulative_drop']:.2f}% over {event['num_days']} days, each day min {threshold:.2f}%)"
