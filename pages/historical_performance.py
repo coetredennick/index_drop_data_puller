@@ -118,32 +118,56 @@ def show_historical_performance():
             'Minor': 0
         }
         
+        total_events = len(all_events) if all_events else 0
+        
         for event in all_events:
             severity = event['severity']
             severity_counts[severity] += 1
         
-        severe_pct = severity_counts['Severe'] / len(all_events) * 100
-        st.metric(
-            "Severe Drops (>7%)", 
-            f"{severity_counts['Severe']} ({severe_pct:.1f}%)",
-            delta=None
-        )
+        # Avoid division by zero
+        if total_events > 0:
+            severe_pct = severity_counts['Severe'] / total_events * 100
+            st.metric(
+                "Severe Drops (>7%)", 
+                f"{severity_counts['Severe']} ({severe_pct:.1f}%)",
+                delta=None
+            )
+        else:
+            st.metric(
+                "Severe Drops (>7%)", 
+                "0 (0.0%)",
+                delta=None
+            )
     
     with col3:
-        major_pct = severity_counts['Major'] / len(all_events) * 100
-        st.metric(
-            "Major Drops (5-7%)", 
-            f"{severity_counts['Major']} ({major_pct:.1f}%)",
-            delta=None
-        )
+        if total_events > 0:
+            major_pct = severity_counts['Major'] / total_events * 100
+            st.metric(
+                "Major Drops (5-7%)", 
+                f"{severity_counts['Major']} ({major_pct:.1f}%)",
+                delta=None
+            )
+        else:
+            st.metric(
+                "Major Drops (5-7%)", 
+                "0 (0.0%)",
+                delta=None
+            )
     
     with col4:
-        significant_pct = severity_counts['Significant'] / len(all_events) * 100
-        st.metric(
-            "Significant Drops (3-5%)", 
-            f"{severity_counts['Significant']} ({significant_pct:.1f}%)",
-            delta=None
-        )
+        if total_events > 0:
+            significant_pct = severity_counts['Significant'] / total_events * 100
+            st.metric(
+                "Significant Drops (3-5%)", 
+                f"{severity_counts['Significant']} ({significant_pct:.1f}%)",
+                delta=None
+            )
+        else:
+            st.metric(
+                "Significant Drops (3-5%)", 
+                "0 (0.0%)",
+                delta=None
+            )
         
 
     
