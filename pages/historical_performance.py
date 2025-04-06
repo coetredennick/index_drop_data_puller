@@ -391,8 +391,16 @@ def show_historical_performance():
         ]}
     ])
     
-    # Display the table without height restriction to show entire table
-    st.dataframe(styled_events_df, use_container_width=True)
+    # Display the table as HTML using markdown to avoid the internal scrollbar
+    # Streamlit's HTML display will use the main page scrollbar instead
+    st.markdown(
+        f"""
+        <div style="overflow-x: auto;">
+            {styled_events_df.to_html(escape=False, index=False)}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     
     # Add download button for the detailed database
     if not events_df.empty:
