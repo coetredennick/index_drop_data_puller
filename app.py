@@ -224,8 +224,7 @@ with st.form(key="analysis_settings_form"):
             min_value=0.1,
             max_value=20.0,
             value=st.session_state.drop_threshold,
-            step=0.1,
-            help="Minimum percentage drop to be considered as a significant market event"
+            step=0.1
         )
         
         detection_col1, detection_col2 = st.columns([3, 2])
@@ -233,8 +232,7 @@ with st.form(key="analysis_settings_form"):
         with detection_col1:
             use_consecutive = st.checkbox(
                 "Detect Consecutive Drops",
-                value=st.session_state.consecutive_days > 1,
-                help="Detect sequences of consecutive days where each day fell by more than the threshold"
+                value=st.session_state.consecutive_days > 1
             )
         
         with detection_col2:
@@ -244,8 +242,7 @@ with st.form(key="analysis_settings_form"):
                     "Days",
                     min_value=2,
                     max_value=5,
-                    value=max(2, st.session_state.consecutive_days),
-                    help="Number of consecutive days each with drops exceeding the threshold"
+                    value=max(2, st.session_state.consecutive_days)
                 )
     
     # Form submit button
@@ -298,22 +295,11 @@ with st.spinner("Fetching S&P 500 data..."):
             # Detect drop events
             drop_events = detect_drop_events(data, st.session_state.drop_threshold)
             
-            # Add debug info
-            st.session_state.debug_info = {
-                'single_drop_count': len(drop_events) if drop_events else 0,
-                'threshold': st.session_state.drop_threshold,
-                'consecutive_days': st.session_state.consecutive_days
-            }
-            
             consecutive_drop_events = detect_consecutive_drops(
                 data, 
                 st.session_state.drop_threshold, 
                 st.session_state.consecutive_days
             ) if st.session_state.consecutive_days > 1 else None
-            
-            # Update debug info
-            if 'debug_info' in st.session_state:
-                st.session_state.debug_info['consecutive_drop_count'] = len(consecutive_drop_events) if consecutive_drop_events else 0
             
             # Update session state
             st.session_state.data = data
@@ -354,39 +340,4 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Add debug expander at the bottom
-with st.expander("Debug Information", expanded=False):
-    if 'debug_info' in st.session_state:
-        st.write("### Event Detection Statistics")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric(
-                label="Single-Day Drop Events", 
-                value=st.session_state.debug_info.get('single_drop_count', 0)
-            )
-        
-        with col2:
-            st.metric(
-                label="Consecutive Drop Events", 
-                value=st.session_state.debug_info.get('consecutive_drop_count', 0)
-            )
-        
-        with col3:
-            st.metric(
-                label="Drop Threshold (%)", 
-                value=f"{st.session_state.debug_info.get('threshold', 0):.1f}"
-            )
-        
-        st.write("### Session State Details")
-        st.json(st.session_state.debug_info)
-        
-        # Add button to force reload data
-        if st.button("Force Reload Data"):
-            st.session_state.data = None
-            st.session_state.drop_events = None
-            st.session_state.consecutive_drop_events = None
-            st.session_state.selected_event = None
-            st.rerun()
-    else:
-        st.write("Debug information not available. Please reload the data.")
+

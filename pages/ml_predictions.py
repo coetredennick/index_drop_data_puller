@@ -170,7 +170,6 @@ def show_ml_predictions():
             "Model Type",
             options=["random_forest", "gradient_boosting", "linear_regression"],
             index=["random_forest", "gradient_boosting", "linear_regression"].index(st.session_state.ml_model_type),
-            help="Select the type of machine learning model to train",
             key="cb_model_type",
             on_change=update_model_type
         )
@@ -180,7 +179,6 @@ def show_ml_predictions():
             "Prediction Target",
             options=["1W", "1M", "3M", "6M", "1Y"],
             index=["1W", "1M", "3M", "6M", "1Y"].index(st.session_state.ml_target_period),
-            help="Select the time horizon for return predictions",
             key="cb_target_period",
             on_change=update_target_period
         )
@@ -192,7 +190,6 @@ def show_ml_predictions():
             max_value=0.5,
             value=st.session_state.ml_test_size,
             step=0.05,
-            help="Proportion of data to use for testing the model",
             key="cb_test_size",
             on_change=update_test_size
         )
@@ -207,7 +204,6 @@ def show_ml_predictions():
             max_value=-1.0,
             value=st.session_state.ml_drop_threshold,
             step=0.5,
-            help="Minimum percentage drop to be considered a significant market event",
             key="cb_drop_threshold",
             on_change=update_drop_threshold
         )
@@ -216,7 +212,6 @@ def show_ml_predictions():
         focus_on_drops = st.checkbox(
             "Focus on Market Drops",
             value=st.session_state.ml_focus_on_drops,
-            help="When enabled, the model will specifically focus on data from market drop events",
             key="cb_focus_on_drops",
             on_change=update_focus_on_drops
         )
