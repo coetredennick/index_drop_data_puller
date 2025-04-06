@@ -391,8 +391,8 @@ def show_historical_performance():
         ]}
     ])
     
-    # Display the table
-    st.dataframe(styled_events_df, height=400)
+    # Display the table without height restriction to show entire table
+    st.dataframe(styled_events_df, use_container_width=True)
     
     # Add download button for the detailed database
     if not events_df.empty:
