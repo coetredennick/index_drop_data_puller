@@ -74,99 +74,109 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
     list
         List of consecutive drop events with dates and magnitudes
     """
+    import pandas as pd
+    import numpy as np
+    import streamlit as st
+    
+    # Print debug info
+    print(f"Detecting consecutive drops with threshold: {threshold_pct}% and {num_days} days")
+    
     if num_days < 2:
         return []
     
-    # Identify consecutive days with negative returns
+    # Rather than looking at individual drops, look at price movement in rolling windows
+    # This approach more accurately captures market corrections
+    
+    # Initialize events list
     events = []
     
-    # Create a boolean series where True indicates days with returns below the threshold
-    # This is more stringent for consecutive drops - we want days with significant drops
-    significant_drops = data['Return'] <= -threshold_pct
+    # Get a sorted copy of the data
+    sorted_data = data.sort_index()
     
-    # Find the indices where significant drops occur
-    drop_indices = significant_drops[significant_drops].index
-    
-    # Group consecutive indices - these are our potential consecutive drop periods
-    consecutive_groups = []
-    current_group = []
-    
-    for i in range(len(drop_indices)):
-        current_idx = drop_indices[i]
+    # Create a rolling window of size num_days
+    for i in range(len(sorted_data) - num_days + 1):
+        # Get the window
+        window = sorted_data.iloc[i:i+num_days]
         
-        if i == 0:
-            # First element starts a new group
-            current_group = [current_idx]
-        else:
-            prev_idx = drop_indices[i-1]
-            # Check if this index is consecutive with the previous one (allowing for weekends/holidays)
-            # Get actual integer position in the dataframe
-            curr_pos = data.index.get_loc(current_idx)
-            prev_pos = data.index.get_loc(prev_idx)
-            
-            # Check if these positions are within 3 trading days (allowing for weekends/holidays)
-            if curr_pos - prev_pos <= 3:
-                current_group.append(current_idx)
-            else:
-                # Not consecutive, start a new group if the previous one was valid
-                if len(current_group) >= num_days:
-                    consecutive_groups.append(current_group)
-                current_group = [current_idx]
+        # Skip if we don't have enough data
+        if len(window) < num_days:
+            continue
         
-        # Check if we're at the end of the list
-        if i == len(drop_indices) - 1 and len(current_group) >= num_days:
-            consecutive_groups.append(current_group)
-    
-    # Process each valid consecutive group
-    for group in consecutive_groups:
-        if len(group) >= num_days:
-            # Get exact window of consecutive days
-            group_window = data.loc[group[0]:group[-1]]
+        # Calculate overall price drop from open of first day to close of last day
+        start_price = window.iloc[0]['Open']
+        end_price = window.iloc[-1]['Close']
+        price_change_pct = (end_price / start_price - 1) * 100
+        
+        # For a window to be a valid consecutive drop:
+        # 1. The total price change must be a drop at least as large as threshold * num_days * 0.6
+        # 2. At least half of the days must have drops of at least threshold
+        
+        # Calculate minimum required drop for this window
+        min_required_drop = -threshold_pct * num_days * 0.6
+        
+        # Count days with significant drops
+        drop_days = sum(window['Return'] <= -threshold_pct)
+        
+        # Only consider this a valid consecutive drop if:
+        # 1. The price dropped significantly overall
+        # 2. At least half the days had significant drops
+        # 3. The price change wasn't too extreme (to filter out data errors)
+        if (price_change_pct <= min_required_drop and 
+            drop_days >= num_days * 0.5 and 
+            price_change_pct > -50):  # Sanity check
             
-            # Calculate cumulative drop from first day open to last day close
-            start_price = data.loc[group[0]]['Open']
-            end_price = data.loc[group[-1]]['Close']
-            cumulative_drop = (end_price / start_price - 1) * 100
+            # Create the event
+            event = {
+                'date': window.index[-1],  # End date
+                'start_date': window.index[0],  # Start date
+                'type': 'consecutive',
+                'num_days': num_days,
+                'daily_drops': window['Return'].tolist(),
+                'cumulative_drop': price_change_pct,
+                'close': window.iloc[-1]['Close'],
+                'open': window.iloc[0]['Open'],
+                'volume': window['Volume'].sum(),
+                'severity': get_drop_severity(abs(price_change_pct))
+            }
             
-            # The cumulative drop must be at least threshold * sqrt(num_days) to account for 
-            # diminishing impact of consecutive drops (market rarely drops linearly)
-            min_required_drop = -threshold_pct * num_days * 0.7  # Scaling factor for consecutive drops
+            # Add forward returns from the last day of the drop
+            last_row = window.iloc[-1]
+            for period in ['1W', '1M', '3M', '6M', '1Y', '3Y']:
+                column = f'Fwd_Ret_{period}'
+                if column in last_row and not pd.isna(last_row[column]):
+                    event[f'fwd_return_{period.lower()}'] = last_row[column]
             
-            if cumulative_drop <= min_required_drop:
-                # Create event with detailed information
-                event = {
-                    'date': group[-1],  # End date
-                    'start_date': group[0],  # Start date
-                    'type': 'consecutive',
-                    'num_days': len(group),  # Actual number of days in the group
-                    'daily_drops': group_window['Return'].tolist(),
-                    'cumulative_drop': cumulative_drop,
-                    'close': data.loc[group[-1]]['Close'],
-                    'open': data.loc[group[0]]['Open'],
-                    'volume': group_window['Volume'].sum(),  # Total volume during the drop
-                    'severity': get_drop_severity(abs(cumulative_drop))
-                }
-                
-                # Add forward returns from the last day of the drop
-                last_row = data.loc[group[-1]]
-                for period in ['1W', '1M', '3M', '6M', '1Y', '3Y']:
-                    column = f'Fwd_Ret_{period}'
-                    if column in last_row and not pd.isna(last_row[column]):
-                        event[f'fwd_return_{period.lower()}'] = last_row[column]
-                
-                # Add technical indicators from the last day of the drop (most relevant for recovery analysis)
-                for indicator in ['RSI_14', 'STOCHk_14_3_3', 'BBP_20_2', 'MACDh_12_26_9', 'ATR_Pct', 'Volume_Ratio']:
-                    if indicator in last_row and not pd.isna(last_row[indicator]):
-                        event[indicator] = last_row[indicator]
-                
-                # Only include events that match the exact requested num_days or are exceptionally severe
-                if len(group) == num_days or (len(group) > num_days and abs(cumulative_drop) >= threshold_pct * num_days):
-                    events.append(event)
+            # Add technical indicators from the last day of the drop
+            for indicator in ['RSI_14', 'STOCHk_14_3_3', 'BBP_20_2', 'MACDh_12_26_9', 'ATR_Pct', 'Volume_Ratio']:
+                if indicator in last_row and not pd.isna(last_row[indicator]):
+                    event[indicator] = last_row[indicator]
+            
+            events.append(event)
     
-    # Sort events by date (newest first)
-    events.sort(key=lambda x: x['date'], reverse=True)
+    # For consecutive drops, we need to filter out overlapping periods
+    # Sort by severity (largest drop first)
+    events.sort(key=lambda x: abs(x['cumulative_drop']), reverse=True)
     
-    return events
+    # Filter out overlapping periods (keep the more severe ones)
+    filtered_events = []
+    used_dates = set()
+    
+    for event in events:
+        # Create a set of all dates in this event
+        event_dates = set(pd.date_range(start=event['start_date'], end=event['date']))
+        
+        # Check if this event overlaps with any already used dates
+        if not event_dates.intersection(used_dates):
+            filtered_events.append(event)
+            used_dates.update(event_dates)
+    
+    # Sort by date (newest first)
+    filtered_events.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Print debug info
+    print(f"Found {len(filtered_events)} valid consecutive drop events for {num_days} days and {threshold_pct}% threshold")
+    
+    return filtered_events
 
 def get_drop_severity(drop_pct):
     """
