@@ -79,10 +79,6 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
     list
         List of consecutive drop events with dates and magnitudes where every day drops by at least threshold_pct
     """
-    import pandas as pd
-    import numpy as np
-    import streamlit as st
-    
     # Print debug info
     print(f"Detecting consecutive drops with threshold: {threshold_pct}% for EACH day over {num_days} consecutive days")
     
@@ -250,5 +246,10 @@ def get_event_label(event):
         return f"{date_str}: {event['severity']} Drop ({event['drop_pct']:.2f}%)"
     else:
         start_date = event['start_date'].strftime('%Y-%m-%d')
-        threshold = abs(event['cumulative_drop'] / event['num_days'])
-        return f"{start_date} to {date_str}: {event['severity']} Drop ({event['cumulative_drop']:.2f}% over {event['num_days']} days, each day min {threshold:.2f}%)"
+        # Show the threshold that each day had to meet
+        actual_threshold = st.session_state.drop_threshold if 'drop_threshold' in st.session_state else None
+        if actual_threshold is not None:
+            return f"{start_date} to {date_str}: {event['severity']} Drop ({event['cumulative_drop']:.2f}% over {event['num_days']} days, EACH day ≥{actual_threshold:.1f}%)"
+        else:
+            # Fallback if threshold isn't in session state
+            return f"{start_date} to {date_str}: {event['severity']} Drop ({event['cumulative_drop']:.2f}% over {event['num_days']} days)"

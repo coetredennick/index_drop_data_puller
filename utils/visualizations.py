@@ -468,9 +468,13 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
         if end_date > pd.Timestamp(datetime.now()):
             end_date = pd.Timestamp(datetime.now())
         
+        # Ensure the data index is using pandas Timestamps for consistent comparison
+        data_copy = data.copy()
+        data_copy.index = pd.DatetimeIndex([pd.Timestamp(idx) if not isinstance(idx, pd.Timestamp) else idx for idx in data.index])
+        
         # Filter data for the selected period
-        mask = (data.index >= start_date) & (data.index <= end_date)
-        period_data = data.loc[mask].copy()
+        mask = (data_copy.index >= start_date) & (data_copy.index <= end_date)
+        period_data = data_copy.loc[mask].copy()
     except Exception as e:
         # Handle any errors in date processing
         print(f"Error processing dates in recovery chart: {e}")
@@ -568,27 +572,7 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
             # Ensure date is a pandas Timestamp
             start_date = pd.Timestamp(event['start_date']) if not isinstance(event['start_date'], pd.Timestamp) else event['start_date']
             
-            # Initialize start_normalized with a default value
-            start_normalized = None
-            
-            try:
-                # Calculate the normalized value for the start date
-                if start_date in period_data.index and 'Close' in period_data.columns:
-                    start_price = period_data.loc[start_date, 'Close']
-                    if pd.notna(start_price) and pd.notna(event_price) and event_price != 0:  # Avoid division by zero
-                        start_normalized = (start_price / event_price - 1) * 100
-                else:
-                    # If start date is not in the data, use the closest date
-                    if not period_data.empty:
-                        closest_date = period_data.index[period_data.index.get_indexer([start_date], method='nearest')[0]]
-                        if closest_date in period_data.index and 'Close' in period_data.columns:
-                            start_price = period_data.loc[closest_date, 'Close']
-                            if pd.notna(start_price) and pd.notna(event_price) and event_price != 0:
-                                start_normalized = (start_price / event_price - 1) * 100
-                                start_date = closest_date
-            except Exception as e:
-                print(f"Error calculating start_normalized: {e}")
-                # Continue without setting start_normalized if there's an error
+            # Removed this section because it's now handled in the markers section
             
             # Add area to highlight the drop period
             # Make sure we're dealing with valid date range within our data
@@ -616,6 +600,15 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
         
         # Add markers for start and end dates with a safety check for start_normalized
         try:
+            # Initialize start_normalized with a default value of None
+            start_normalized = None
+            
+            # Calculate start_normalized (safely moved to this section)
+            if start_date in period_data.index and 'Close' in period_data.columns:
+                start_price = period_data.loc[start_date, 'Close']
+                if pd.notna(start_price) and pd.notna(event_price) and event_price != 0:  # Avoid division by zero
+                    start_normalized = (start_price / event_price - 1) * 100
+                    
             # Ensure start_normalized is defined and has a value
             if start_normalized is not None:
                 fig.add_trace(
@@ -771,9 +764,13 @@ def create_technical_indicator_chart(data, event, indicator, title=None, height=
         if end_date > pd.Timestamp(datetime.now()):
             end_date = pd.Timestamp(datetime.now())
         
+        # Ensure the data index is using pandas Timestamps for consistent comparison
+        data_copy = data.copy()
+        data_copy.index = pd.DatetimeIndex([pd.Timestamp(idx) if not isinstance(idx, pd.Timestamp) else idx for idx in data.index])
+        
         # Filter data for the selected period
-        mask = (data.index >= start_date) & (data.index <= end_date)
-        period_data = data.loc[mask].copy()
+        mask = (data_copy.index >= start_date) & (data_copy.index <= end_date)
+        period_data = data_copy.loc[mask].copy()
     except Exception as e:
         # Handle any errors in date processing
         print(f"Error processing dates in technical indicator chart: {e}")

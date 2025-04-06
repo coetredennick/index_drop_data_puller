@@ -403,37 +403,24 @@ def show_historical_performance():
             
         return ''
     
-    # Create format dictionary for the detailed table
-    format_dict = {}
-    for col in events_df.columns:
-        if '%' in col:  # Format percentage columns
-            # Make sure we only format numeric values
-            format_dict[col] = lambda x: '{:.1f}%'.format(x) if isinstance(x, (int, float)) else x
-    
-    # Apply styling with formatting and smaller text using map (replaces deprecated applymap)
-    # Let's define custom CSS directly for the HTML table to ensure styling is preserved
-    # Create a custom HTML with our styling to ensure the right columns get formatted
-    
-    # First format the data values with our formatter
+    # First format the data values with simpler, more robust approach
     formatted_df = events_df.copy()
-    # Manually format the values instead of using format string
+    
+    # Format all columns directly without using format_dict
     for col in formatted_df.columns:
-        if col in format_dict:
-            if '%' in str(format_dict[col]):
-                # Format as percentage
-                formatted_df[col] = formatted_df[col].apply(
-                    lambda x: f"{x:.1f}%" if pd.notna(x) and isinstance(x, (int, float)) else x
-                )
-            elif ',' in str(format_dict[col]):
-                # Format with comma separator
-                formatted_df[col] = formatted_df[col].apply(
-                    lambda x: f"{x:,.0f}" if pd.notna(x) and isinstance(x, (int, float)) else x
-                )
-            elif '.' in str(format_dict[col]):
-                # Format with decimal places
-                formatted_df[col] = formatted_df[col].apply(
-                    lambda x: f"{x:.2f}" if pd.notna(x) and isinstance(x, (int, float)) else x
-                )
+        if '%' in col:  # Format percentage columns
+            # Format as percentage with one decimal place
+            formatted_df[col] = formatted_df[col].apply(
+                lambda x: f"{x:.1f}%" if pd.notna(x) and isinstance(x, (int, float)) else x
+            )
+        elif col == 'Date' or col == 'Type' or col == 'Severity':
+            # Keep these columns as is (string columns)
+            continue
+        else:
+            # Format other numeric columns with commas for thousands
+            formatted_df[col] = formatted_df[col].apply(
+                lambda x: f"{x:,.0f}" if pd.notna(x) and isinstance(x, (int, float)) else x
+            )
     
     # Apply color formatting
     html_content = "<div style='overflow-x: auto;'>"
