@@ -200,9 +200,14 @@ def show_historical_performance():
     # Create DataFrame for events
     events_df = pd.DataFrame(event_rows)
     
-    # Add totals row if we have data
+    # Sort by date (newest first)
     if len(events_df) > 0:
-        # Calculate totals/averages for numeric columns
+        events_df = events_df.sort_values('Date', ascending=False)
+        
+        # Add a column for the total/average return across periods
+        events_df['Total Avg (%)'] = events_df[['1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)']].mean(axis=1)
+        
+        # Add a totals row at the bottom
         totals_row = {
             'Date': 'TOTALS',
             'Type': f'{len(events_df)} Events',
@@ -210,19 +215,12 @@ def show_historical_performance():
             'Severity': 'All Types',
         }
         
-        # For each return period, calculate average
-        for period in ['1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)']:
-            totals_row[period] = events_df[period].mean()
-            
-        # Add totals row at top
-        events_df = pd.concat([pd.DataFrame([totals_row]), events_df], ignore_index=True)
+        # Add totals for each return period
+        for col in ['1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)', 'Total Avg (%)']:
+            totals_row[col] = events_df[col].mean()
         
-    # Sort the rest by date (newest first)
-    if len(events_df) > 1:  # If we have more than just the totals row
-        # Create a mask for all rows except the first (totals) row
-        mask = events_df.index > 0
-        # Sort all rows except the totals row
-        events_df.loc[mask] = events_df.loc[mask].sort_values('Date', ascending=False).values
+        # Add totals row at the bottom
+        events_df = pd.concat([events_df, pd.DataFrame([totals_row])], ignore_index=True)
     
     # Function to apply color formatting for the detailed database
     def color_cell(val):
