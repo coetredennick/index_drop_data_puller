@@ -84,10 +84,16 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
         
         # Check if all days in the window have drops exceeding the threshold
         if all(window['Return'] <= -threshold_pct):
-            # Calculate cumulative drop
-            cumulative_drop = (window.iloc[-1]['Close'] / window.iloc[0]['Open'] - 1) * 100
+            # Calculate cumulative drop directly from the prices
+            start_price = window.iloc[0]['Open']
+            end_price = window.iloc[-1]['Close']
+            cumulative_drop = (end_price / start_price - 1) * 100
             
-            # Create event
+            # If cumulative drop is not negative enough, this isn't a real consecutive drop event
+            if cumulative_drop > -threshold_pct * num_days * 0.5:  # Use a lower threshold to account for intraday recoveries
+                continue
+                
+            # Create event with detailed information
             event = {
                 'date': window.index[-1],  # End date
                 'start_date': window.index[0],  # Start date
@@ -96,6 +102,8 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
                 'daily_drops': window['Return'].tolist(),
                 'cumulative_drop': cumulative_drop,
                 'close': window.iloc[-1]['Close'],
+                'open': window.iloc[0]['Open'],
+                'volume': window['Volume'].sum(),  # Total volume during the drop
                 'severity': get_drop_severity(abs(cumulative_drop))
             }
             
@@ -106,7 +114,7 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
                 if column in last_row and not pd.isna(last_row[column]):
                     event[f'fwd_return_{period.lower()}'] = last_row[column]
             
-            # Add technical indicators from the last day
+            # Add technical indicators from the last day of the drop (most relevant for recovery analysis)
             for indicator in ['RSI_14', 'STOCHk_14_3_3', 'BBP_20_2', 'MACDh_12_26_9', 'ATR_Pct', 'Volume_Ratio']:
                 if indicator in last_row and not pd.isna(last_row[indicator]):
                     event[indicator] = last_row[indicator]

@@ -258,7 +258,10 @@ if submit_button:
     st.session_state.consecutive_days = consecutive_days if use_consecutive else 1
     st.session_state.date_range = (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
     
-    # Reset selected event when settings change
+    # Reset data and events when settings change
+    st.session_state.data = None
+    st.session_state.drop_events = None
+    st.session_state.consecutive_drop_events = None
     st.session_state.selected_event = None
     
     # Show info message
