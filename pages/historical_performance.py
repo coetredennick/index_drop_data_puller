@@ -123,11 +123,6 @@ def show_historical_performance():
     fig_price = create_price_chart(st.session_state.data, all_events)
     st.plotly_chart(fig_price, use_container_width=True)
     
-    # Show event distribution histogram
-    st.markdown("### Distribution of Drop Events")
-    fig_dist = create_distribution_histogram(all_events)
-    st.plotly_chart(fig_dist, use_container_width=True)
-    
     # Calculate aggregate returns after drops
     st.markdown("### Aggregate Return Analysis After Market Drops")
     
