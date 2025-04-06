@@ -309,8 +309,22 @@ def show_historical_performance():
     # Prepare individual event data first
     event_rows = []
     for event in all_events:
+        # For consecutive drops, create a date range string with all dates
+        if event['type'] == 'consecutive':
+            # Format: Start date → End date (with all dates in between)
+            start_date = pd.Timestamp(event['start_date']) if not isinstance(event['start_date'], pd.Timestamp) else event['start_date']
+            end_date = pd.Timestamp(event['date']) if not isinstance(event['date'], pd.Timestamp) else event['date']
+            
+            # Generate all dates for the period (including non-trading days)
+            date_range = pd.date_range(start=start_date, end=end_date)
+            date_list = [d.strftime('%Y-%m-%d') for d in date_range]
+            date_str = f"{start_date.strftime('%Y-%m-%d')} → {end_date.strftime('%Y-%m-%d')}\n({', '.join(date_list)})"
+        else:
+            # For single day events, just use the date
+            date_str = event['date'].strftime('%Y-%m-%d')
+            
         row = {
-            'Date': event['date'].strftime('%Y-%m-%d'),
+            'Date': date_str,
             'Type': 'Single Day' if event['type'] == 'single_day' else f'Consecutive ({event["num_days"]} days)',
             'Drop (%)': event['drop_pct'] if event['type'] == 'single_day' else event['cumulative_drop'],
             'Severity': event['severity'],
