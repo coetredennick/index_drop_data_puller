@@ -381,6 +381,16 @@ def show_historical_performance():
         html_content += f"<th style='font-size:11px; padding:4px 8px; text-align:center; background-color:#e9ecef; border-bottom:1px solid #adb5bd; white-space:nowrap;'>{col}</th>"
     html_content += "</tr>"
     
+    # Column names are now processed automatically
+    
+    # Now we know the column index for Total Avg
+    # Get the index of the "Total Avg" column
+    total_avg_col_index = None
+    for idx, col_name in enumerate(formatted_df.columns):
+        if "Total" in col_name and "Avg" in col_name:
+            total_avg_col_index = idx
+            break
+    
     # Add data rows
     row_count = len(formatted_df)
     for i, (_, row) in enumerate(formatted_df.iterrows()):
@@ -388,13 +398,26 @@ def show_historical_performance():
         html_content += "<tr>"
         
         for j, (col, val) in enumerate(row.items()):
-            # Determine if this is the Total column (index 9)
-            is_total_col = j == 9  # 10th column (0-indexed)
+            # Determine if this is the Total column using the discovered index
+            is_total_col = total_avg_col_index is not None and j == total_avg_col_index
             
             # Set the cell style based on position and value
             cell_style = "font-size:10px; padding:2px 5px; white-space:nowrap; "
             
-            # Add special formatting for the Total column
+            # Add color based on value (if it's a number) for all cells except the total column
+            # This restores the green/red heatmap
+            try:
+                num_val = float(val.replace('%', '').replace(',', '')) if isinstance(val, str) else val
+                if pd.notna(num_val) and not is_last_row:  # Skip coloring for the totals row
+                    if not is_total_col:  # Apply red/green to all non-total columns
+                        if num_val < 0:
+                            cell_style += "color:#d60000; "  # Red for negative
+                        elif num_val > 0:
+                            cell_style += "color:#008800; "  # Green for positive
+            except (ValueError, AttributeError):
+                pass  # Not a number or empty, keep default styling
+            
+            # Add special formatting for the Total column (after applying colors)
             if is_total_col:
                 cell_style += "border-left:2px solid #333; background-color:#f0f4f8; font-weight:900; color:#0056b3; text-shadow:0 0 0.2px #0056b3; "
             
@@ -405,17 +428,6 @@ def show_historical_performance():
             # Add extra emphasis for the intersection of totals row and column
             if is_last_row and is_total_col:
                 cell_style = "font-size:11px; padding:2px 5px; white-space:nowrap; border-top:2px solid #333; border-bottom:2px solid #333; border-left:2px solid #333; background-color:#e6f0ff; font-weight:900; color:#004494; text-shadow:0 0 0.5px #004494; "
-            
-            # Add color based on value (if it's a number)
-            try:
-                num_val = float(val.replace('%', '').replace(',', '')) if isinstance(val, str) else val
-                if pd.notna(num_val) and not is_last_row:  # Skip coloring for the totals row (already styled)
-                    if num_val < 0:
-                        cell_style += "color:#d60000; "  # Red for negative
-                    elif num_val > 0:
-                        cell_style += "color:#008800; "  # Green for positive
-            except (ValueError, AttributeError):
-                pass  # Not a number or empty, keep default styling
             
             html_content += f"<td style='{cell_style}'>{val}</td>"
         
