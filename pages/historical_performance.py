@@ -79,7 +79,7 @@ def show_historical_performance():
         st.metric(
             "Total Drop Events", 
             len(all_events),
-            help="Total number of detected drop events within the selected date range"
+
         )
     
     with col2:
@@ -99,7 +99,7 @@ def show_historical_performance():
         st.metric(
             "Severe Drops (>7%)", 
             f"{severity_counts['Severe']} ({severe_pct:.1f}%)",
-            help="Number and percentage of severe drop events (>7%)"
+
         )
     
     with col3:
@@ -107,7 +107,7 @@ def show_historical_performance():
         st.metric(
             "Major Drops (5-7%)", 
             f"{severity_counts['Major']} ({major_pct:.1f}%)",
-            help="Number and percentage of major drop events (5-7%)"
+
         )
     
     with col4:
@@ -115,7 +115,7 @@ def show_historical_performance():
         st.metric(
             "Significant Drops (3-5%)", 
             f"{severity_counts['Significant']} ({significant_pct:.1f}%)",
-            help="Number and percentage of significant drop events (3-5%)"
+
         )
     
     # Show price chart with drop events marked

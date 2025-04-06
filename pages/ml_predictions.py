@@ -443,16 +443,7 @@ def show_ml_predictions():
     if model_result is None:
         # No model trained yet, show placeholder
         st.info("No model has been trained yet. Use the 'Train Model on Market Drops' button above to train a model.")
-        # Show some basic info about what to expect
-        st.markdown("""
-        #### About Machine Learning Predictions
-        
-        Training a model will allow you to:
-        1. Forecast S&P 500 prices using machine learning
-        2. Understand feature importance in market predictions
-        3. Analyze patterns in market drop recoveries
-        4. Make predictions based on current market conditions
-        """)
+        # Empty placeholder
         # Skip the rest of the model-dependent sections instead of returning
         st.markdown("### S&P 500 Price Forecast")
         st.info("No forecast available until a model is trained.")
@@ -462,12 +453,7 @@ def show_ml_predictions():
     elif not model_result['success']:
         st.error(f"Model error: {model_result.get('error', 'Unknown error')}")
         # Display alternative content instead of return
-        st.markdown("""
-        #### Model Training Error
-        
-        The model training was not successful. Please try again with different parameters
-        or check the error message above for details.
-        """)
+        st.markdown("#### Model Training Error")
         # Create placeholder structure for the rest of the page
         st.markdown("### S&P 500 Price Forecast")
         st.info("No forecast available due to model training error.")
@@ -540,21 +526,7 @@ def show_ml_predictions():
             )
             st.plotly_chart(forecast_chart, use_container_width=True)
         
-        # Add enhanced description of forecast
-        with st.expander("About this ML forecast", expanded=False):
-            st.markdown("""
-            **How this forecast works:**
-            
-            This advanced ML forecast uses a machine learning model trained specifically on historical S&P 500 market data to predict future price movements. The model analyzes patterns in technical indicators, volatility, and historical returns to project likely price trajectories.
-            
-            **Key elements:**
-            - **Historical Data (Blue Line)**: Shows Year-to-Date (YTD) historical prices
-            - **ML Forecast (Red Line)**: Shows predicted prices based on model analysis
-            - **Confidence Interval (Shaded Area)**: Reflects uncertainty in the prediction, widening with time
-            - **Latest Price (Black Dot)**: The starting point for the forecast
-            
-            *This forecast is for educational purposes only and should not be used as financial advice.*
-            """)
+        # No explanatory text
         
         st.markdown("---")
         
@@ -637,17 +609,21 @@ def show_ml_predictions():
                 best_return = returns_series.max()
                 worst_return = returns_series.min()
                 
-                # Display summary statistics
-                st.markdown(f"""
-                **Post-Drop Return Statistics ({target_period})**
+                # Display compact statistics without explanation
+                st.markdown(f"**Post-Drop Return Statistics ({target_period})**")
                 
-                From {len(returns_series)} historical drop events:
-                - **Positive Outcomes**: {positive_pct:.1f}% of events led to positive returns
-                - **Average Return**: {avg_return:.2f}%
-                - **Median Return**: {median_return:.2f}%
-                - **Best Recovery**: +{best_return:.2f}%
-                - **Worst Outcome**: {worst_return:.2f}%
-                """)
+                # Create a more compact metrics display
+                metric_cols = st.columns(5)
+                with metric_cols[0]:
+                    st.metric("Positive %", f"{positive_pct:.1f}%")
+                with metric_cols[1]:
+                    st.metric("Avg Return", f"{avg_return:.2f}%")
+                with metric_cols[2]:
+                    st.metric("Median", f"{median_return:.2f}%")
+                with metric_cols[3]:
+                    st.metric("Best", f"+{best_return:.2f}%")
+                with metric_cols[4]:
+                    st.metric("Worst", f"{worst_return:.2f}%")
                 
                 # Create a histogram
                 import plotly.express as px
@@ -674,12 +650,8 @@ def show_ml_predictions():
                     # Group by drop streak
                     drop_magnitudes = drop_data.groupby('Drop_Streak')['Cumulative_Drop'].mean()
                     
-                    # Display analysis
-                    st.markdown("""
-                    **Drop Event Characteristics**
-                    
-                    The model was trained on various types of market drops:
-                    """)
+                    # Display title only
+                    st.markdown("**Drop Event Characteristics**")
                     
                     # Create combined dataframe
                     if not streak_counts.empty:
@@ -748,19 +720,8 @@ def show_ml_predictions():
         
         if current_data.empty:
             st.warning("Insufficient data to make predictions for current market conditions.")
-            # Add empty state display instead of returning
-            st.markdown("""
-            #### Unable to Make Current Prediction
-            
-            The application does not have enough data to make predictions for the current market conditions.
-            Please adjust the date range or try a different model configuration.
-            """)
-            # Display a placeholder for the prediction section
-            st.markdown("""
-            #### No Current Prediction Available
-            
-            Try expanding your date range or adjusting your model parameters to enable predictions.
-            """)
+            # Simplified message
+            st.markdown("#### No prediction available")
             # Continue to rest of the page - don't return
         else:
             # Continue with prediction logic for valid data
@@ -789,19 +750,7 @@ def show_ml_predictions():
                     unsafe_allow_html=True
                 )
                 
-                # Confidence interval explanation
-                st.markdown("""
-                #### Prediction Interpretation
-                
-                The prediction shown is a point estimate based on current market conditions. Actual returns 
-                can vary significantly due to unforeseen events and market conditions. Here's how to interpret 
-                this prediction:
-                
-                - This prediction represents the expected return over the next {period}, not a guaranteed outcome.
-                - The model is trained on historical data and past relationships between technical indicators and returns.
-                - Market conditions outside the training data range may lead to less accurate predictions.
-                - Always combine this prediction with other analysis tools and your own judgment.
-                """.replace("{period}", target_period))
+                # No interpretation explanation to keep UI clean
                 
                 # Prediction confidence based on model metrics
                 r2 = metrics.get('r2_test', 0)
@@ -833,34 +782,4 @@ def show_ml_predictions():
     else:
         st.warning("Unable to make a prediction for current market conditions.")
     
-    # Model details and limitations
-    with st.expander("Model Details and Limitations"):
-        st.markdown("""
-        #### Model Details
-        
-        This machine learning model is trained to predict future returns based on current market 
-        conditions and technical indicators. The model uses the following features:
-        
-        - Technical indicators (RSI, Stochastic, MACD, Bollinger Bands, etc.)
-        - Price relative to moving averages
-        - Recent price changes and volatility
-        - Volume metrics
-        
-        #### Limitations
-        
-        Please be aware of the following limitations:
-        
-        1. **Past Performance**: The model is trained on historical data and assumes similar 
-           relationships will hold in the future.
-        2. **Black Swan Events**: The model cannot predict unexpected events like geopolitical crises, 
-           pandemics, or other unpredictable market shocks.
-        3. **Changing Market Regimes**: Market behavior can change over time, affecting the 
-           reliability of predictions.
-        4. **Limited Features**: The model only considers technical indicators and price patterns, 
-           not fundamental data, news, or sentiment.
-        
-        #### Recommended Use
-        
-        This prediction tool should be used as one component of a broader investment decision-making 
-        process, not as a standalone signal for trading decisions.
-        """)
+    # No model details expander to keep interface clean
