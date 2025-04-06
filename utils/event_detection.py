@@ -58,7 +58,12 @@ def detect_drop_events(data, threshold_pct):
 
 def detect_consecutive_drops(data, threshold_pct, num_days):
     """
-    Detect consecutive days of drops in the S&P 500 where EACH day meets or exceeds the threshold
+    Detect consecutive days of drops in the S&P 500 where EACH day meets or exceeds the threshold.
+    
+    This algorithm focuses ONLY on the daily drop threshold. For example, with a 4.8% threshold
+    and 2 consecutive days, it will find all events where there were at least 2 consecutive days
+    each with a 4.8% or greater drop. The total cumulative drop is calculated but not used as a 
+    filtering criterion.
     
     Parameters:
     -----------
@@ -109,20 +114,15 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
         
         # NEW LOGIC: For a window to be a valid consecutive drop:
         # 1. EVERY day must have a drop at least as large as the threshold
-        # 2. The total cumulative drop must be at least threshold * num_days
-        
-        # Calculate minimum required drop for this window
-        min_required_drop = -threshold_pct * num_days
+        # Note: We're not requiring the cumulative drop to be a specific amount
         
         # Check if ALL days meet the threshold requirement
         all_days_meet_threshold = all(day_return <= -threshold_pct for day_return in window['Return'])
         
         # Only consider this a valid consecutive drop if:
         # 1. ALL days have drops meeting or exceeding the threshold
-        # 2. The cumulative price change meets the required minimum
-        # 3. The price change isn't too extreme (to filter out data errors)
+        # 2. The price change isn't too extreme (to filter out data errors)
         if (all_days_meet_threshold and
-            price_change_pct <= min_required_drop and 
             price_change_pct > -50):  # Sanity check
             
             # Create the event
