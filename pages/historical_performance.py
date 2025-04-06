@@ -63,11 +63,34 @@ def show_historical_performance():
     if not data_available:
         st.warning("No data available. Please adjust the date range and fetch data.")
     else:
-        # Get all events (both single-day and consecutive)
-        all_events = get_all_events()
+        # Add event type filter
+        event_type_options = {
+            "All Events": "all",
+            "Single-Day Drops": "single_day",
+            "Consecutive Drops": "consecutive"
+        }
+        
+        event_filter = st.selectbox(
+            "Event Type Filter:",
+            options=list(event_type_options.keys()),
+            index=0,
+            key="historical_event_type_filter"
+        )
+        
+        # Get the selected event type value
+        selected_event_type = event_type_options[event_filter]
+        
+        # Get events based on the selected filter
+        all_events = get_all_events(event_type=selected_event_type)
         
         if not all_events:
-            st.warning(f"No drop events found with the current threshold ({st.session_state.drop_threshold}%). Try lowering the threshold.")
+            if selected_event_type == "all":
+                st.warning(f"No drop events found with the current threshold ({st.session_state.drop_threshold}%). Try lowering the threshold.")
+            elif selected_event_type == "single_day":
+                st.warning(f"No single-day drop events found with the current threshold ({st.session_state.drop_threshold}%). Try lowering the threshold.")
+            elif selected_event_type == "consecutive":
+                st.warning(f"No consecutive drop events found with the current threshold ({st.session_state.drop_threshold}%) and consecutive days setting ({st.session_state.consecutive_days} days). Try adjusting these parameters.")
+            
             all_events = []  # Empty list to avoid None references later
     
     # Display overview metrics

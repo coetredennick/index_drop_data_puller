@@ -201,23 +201,28 @@ def get_drop_severity(drop_pct):
     else:
         return 'Minor'
 
-def get_all_events():
+def get_all_events(event_type='all'):
     """
     Combine single-day and consecutive drop events
     
+    Parameters:
+    -----------
+    event_type : str, optional
+        Type of events to include: 'all', 'single_day', or 'consecutive'
+        
     Returns:
     --------
     list
-        Combined list of all drop events
+        Filtered and sorted list of drop events
     """
     all_events = []
     
-    # Add single-day drop events
-    if st.session_state.drop_events:
+    # Add single-day drop events if requested
+    if (event_type == 'all' or event_type == 'single_day') and st.session_state.drop_events:
         all_events.extend(st.session_state.drop_events)
     
-    # Add consecutive drop events
-    if st.session_state.consecutive_drop_events:
+    # Add consecutive drop events if requested
+    if (event_type == 'all' or event_type == 'consecutive') and st.session_state.consecutive_drop_events:
         all_events.extend(st.session_state.consecutive_drop_events)
     
     # Sort by date (newest first)
