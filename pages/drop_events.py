@@ -319,11 +319,6 @@ def show_drop_events():
                 # Append the total row
                 price_data = pd.concat([price_data, total_row], ignore_index=True)
                 
-                # Debug print to see what we have
-                st.write("Debug: Total row added to price_data")
-                st.write(f"Row count: {len(price_data)}")
-                st.write(f"Last row date: {price_data['Date'].iloc[-1]}")
-                
                 # Format the Date column - handle both datetime and string types
                 for i in range(len(price_data)):
                     if isinstance(price_data.loc[i, 'Date'], pd.Timestamp):
