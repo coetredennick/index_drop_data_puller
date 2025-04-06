@@ -26,10 +26,15 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
     pandas.DataFrame
         DataFrame with features for ML models, and list of feature names
     """
-    # Create a copy of the data
+    print(f"Preparing features for ML model with focus_on_drops={focus_on_drops}, drop_threshold={drop_threshold}")
+    
+    # Create a copy of the data to avoid modifying the original
     df = data.copy()
     
-    # Check for required columns
+    # Print available columns for debugging
+    print(f"Available columns in dataset: {', '.join(df.columns[:10])}..." if len(df.columns) > 10 else df.columns.tolist())
+    
+    # Check for required technical indicator columns
     required_cols = ['RSI_14', 'STOCHk_14_3_3', 'BBP_20_2', 'MACDh_12_26_9', 'ATR_Pct', 'Return']
     missing_cols = [col for col in required_cols if col not in df.columns]
     
@@ -39,7 +44,8 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         print(f"Available columns: {df.columns.tolist()}")
         return pd.DataFrame(), []
     
-    # Select features for the model - only include those that exist
+    # Select features for the model - use ALL available technical indicators
+    # Base technical indicators used in the app
     base_features = [
         'RSI_14', 'STOCHk_14_3_3', 'BBP_20_2', 'MACDh_12_26_9', 'ATR_Pct'
     ]
@@ -47,7 +53,19 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
     # Filter to only include columns that exist
     features = [f for f in base_features if f in df.columns]
     
-    # Add Volume Ratio if available
+    # Add additional technical indicators if they exist
+    additional_indicators = [
+        'RSI_7', 'SMA_10', 'SMA_20', 'SMA_50', 'SMA_200', 
+        'EMA_9', 'EMA_20', 'EMA_50', 'MACD_12_26_9', 'MACDs_12_26_9', 
+        'ADX_14', 'Plus_DI_14', 'Minus_DI_14', 'OBV'
+    ]
+    
+    # Add the available indicators to features
+    for indicator in additional_indicators:
+        if indicator in df.columns:
+            features.append(indicator)
+    
+    # Add Volume Ratio if available or calculate it
     if 'Volume_Ratio' in df.columns:
         features.append('Volume_Ratio')
     elif 'Volume' in df.columns and 'Avg_Vol_50' in df.columns:
@@ -55,7 +73,7 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         df['Volume_Ratio'] = df['Volume'] / df['Avg_Vol_50']
         features.append('Volume_Ratio')
     
-    # Add price-based features
+    # Add price-based features and ratios
     if 'SMA_50' in df.columns and 'SMA_200' in df.columns:
         df['SMA_50_200_Ratio'] = df['SMA_50'] / df['SMA_200']
         features.append('SMA_50_200_Ratio')
@@ -64,23 +82,51 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         df['EMA_20_Close_Ratio'] = df['EMA_20'] / df['Close']
         features.append('EMA_20_Close_Ratio')
     
-    # Add lagged returns
-    if 'Return' in df.columns:
-        for lag in [1, 5, 10, 20]:
-            df[f'Return_Lag_{lag}'] = df['Return'].shift(lag)
-            features.append(f'Return_Lag_{lag}')
-        
-        # Calculate rolling volatility
-        df['Volatility_20'] = df['Return'].rolling(window=20).std()
-        features.append('Volatility_20')
+    if 'High' in df.columns and 'Low' in df.columns and 'Close' in df.columns:
+        # Calculate daily range as percentage
+        df['Daily_Range_Pct'] = (df['High'] - df['Low']) / df['Close'] * 100
+        features.append('Daily_Range_Pct')
     
-    # Add features specifically focused on market drops
-    # Identify consecutive drop days
+    # Calculate distance from recent highs/lows
+    if 'Close' in df.columns:
+        # Distance from 52-week high (approximately 252 trading days)
+        lookback_days = min(252, len(df) - 1)
+        
+        if lookback_days > 20:  # Ensure we have enough data
+            df['52W_High'] = df['Close'].rolling(window=lookback_days).max()
+            df['Pct_From_52W_High'] = (df['Close'] / df['52W_High'] - 1) * 100
+            features.append('Pct_From_52W_High')
+            
+            df['52W_Low'] = df['Close'].rolling(window=lookback_days).min()
+            df['Pct_From_52W_Low'] = (df['Close'] / df['52W_Low'] - 1) * 100
+            features.append('Pct_From_52W_Low')
+    
+    # Add lagged returns and volatility features
+    if 'Return' in df.columns:
+        # Add lagged returns for different timeframes
+        for lag in [1, 5, 10, 20, 60]:
+            if len(df) > lag:
+                df[f'Return_Lag_{lag}'] = df['Return'].shift(lag)
+                features.append(f'Return_Lag_{lag}')
+        
+        # Add rolling returns for different windows
+        for window in [5, 10, 20]:
+            if len(df) > window:
+                df[f'Rolling_Return_{window}'] = df['Return'].rolling(window=window).sum()
+                features.append(f'Rolling_Return_{window}')
+        
+        # Calculate rolling volatility features
+        for window in [10, 20, 60]:
+            if len(df) > window:
+                df[f'Volatility_{window}'] = df['Return'].rolling(window=window).std()
+                features.append(f'Volatility_{window}')
+    
+    # Add features specifically focused on market drops and corrections
     if 'Return' in df.columns:
         # Mark significant drop days
         df['Is_Drop_Day'] = df['Return'] <= drop_threshold
         
-        # Count consecutive drop days
+        # Count consecutive drop days (streak)
         df['Drop_Streak'] = 0
         current_streak = 0
         streak_values = []
@@ -95,7 +141,6 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         
         # Then set them all at once to avoid the SettingWithCopyWarning
         df.loc[:, 'Drop_Streak'] = streak_values
-        
         features.append('Drop_Streak')
         
         # Calculate magnitude of drops (cumulative over streaks)
@@ -113,14 +158,20 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         
         # Then set them all at once to avoid the SettingWithCopyWarning
         df.loc[:, 'Cumulative_Drop'] = cumulative_values
-        
         features.append('Cumulative_Drop')
         
-        # Add recent market behavior features
+        # Add market behavior features
         df['Recent_Max_Drop'] = df['Return'].rolling(window=10).min()
         df['Recent_Volatility'] = df['Return'].rolling(window=10).std()
-        
         features.extend(['Recent_Max_Drop', 'Recent_Volatility'])
+        
+        # Count number of drop days in recent periods
+        for window in [5, 10, 20]:
+            if len(df) > window:
+                df[f'Drop_Days_{window}'] = df['Is_Drop_Day'].rolling(window=window).sum()
+                features.append(f'Drop_Days_{window}')
+    
+    print(f"Created {len(features)} features for ML model")
     
     if not features:
         print("Warning: No valid features available for ML model.")
@@ -129,7 +180,9 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
     # Focus specifically on market drops if requested
     if focus_on_drops and 'Return' in df.columns:
         print(f"Focusing on market drops (threshold: {drop_threshold}%)")
-        # Either a drop day or the day after a drop or in a streak
+        
+        # Define the drop condition to focus on significant market corrections
+        # Either a current drop day, a day after a drop, or during a streak of drops
         drop_condition = (
             (df['Return'] <= drop_threshold) | 
             (df['Return'].shift(1) <= drop_threshold) | 
@@ -138,17 +191,19 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         filtered_df = df[drop_condition].copy()
         
         # If filtering results in too few data points, use a more relaxed threshold
-        if len(filtered_df) < 30:  # Minimum number for reliable training
+        if len(filtered_df) < 50:  # Minimum number for reliable training
             print(f"Warning: Too few data points ({len(filtered_df)}) with threshold {drop_threshold}%. Using a more relaxed threshold.")
             relaxed_threshold = max(drop_threshold * 0.5, -1.0)  # More relaxed threshold
             drop_condition = (
                 (df['Return'] <= relaxed_threshold) | 
                 (df['Return'].shift(1) <= relaxed_threshold) | 
+                (df['Return'].rolling(window=5).min() <= relaxed_threshold) |
                 (df['Drop_Streak'] > 0)
             )
             filtered_df = df[drop_condition].copy()
             print(f"Relaxed threshold to {relaxed_threshold}%, got {len(filtered_df)} market drop events")
         
+        # Use the filtered data
         df = filtered_df
         print(f"Filtered to {len(df)} market drop events for training")
     
@@ -168,6 +223,7 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
             percent = (non_nan / len(df_clean)) * 100
             print(f"Column {col_name}: {non_nan}/{len(df_clean)} non-NaN values ({percent:.1f}%)")
     
+    print(f"Final dataset for ML model contains {len(df_clean)} rows with {len(features)} features")
     return df_clean, features
 
 def train_model(data, features, target_column, model_type='random_forest', test_size=0.2):
@@ -413,9 +469,13 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
     # Create the figure
     fig = go.Figure()
     
+    # Add debug info
+    print(f"Creating ML forecast chart for {days_to_forecast} days")
+    
     # Error handling: Check if model_result is None or not successful
     if model_result is None or not model_result.get('success', False):
         # No model available
+        print("No ML model available for forecasting")
         fig.update_layout(
             title=title,
             annotations=[dict(
@@ -432,6 +492,7 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
     
     # Error handling: Check if data is empty
     if data is None or data.empty or 'Close' not in data.columns:
+        print("Insufficient historical data for ML forecasting")
         fig.update_layout(
             title=title,
             annotations=[dict(
@@ -446,9 +507,14 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
         )
         return fig
     
+    # Print debug info about dataset and features
+    print(f"Data contains {len(data)} rows with {len(data.columns)} columns")
+    print(f"ML model requires {len(features)} features")
+    
     # Error handling: Check if all required features are available
     missing_features = [f for f in features if f not in data.columns]
     if missing_features:
+        print(f"Missing features for ML forecast: {missing_features}")
         fig.update_layout(
             title=title,
             annotations=[dict(
@@ -463,43 +529,66 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
         )
         return fig
     
-    # Get the last available data point
+    # Get the last available data point (most recent trading day)
     last_date = data.index[-1]
     last_price = data['Close'].iloc[-1]
+    print(f"Last available data point: {last_date}, Price: ${last_price:.2f}")
     
-    # Create a date range for the forecast period
+    # Create a date range for the forecast period - using business days to match trading days
     try:
-        forecast_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=days_to_forecast)
+        # Use business day frequency to simulate trading days more accurately
+        forecast_dates = []
+        current_date = last_date
+        
+        for _ in range(days_to_forecast):
+            # Add one business day (approximation of trading day)
+            current_date = current_date + pd.tseries.offsets.BDay(1)
+            forecast_dates.append(current_date)
+            
+        print(f"Created forecast dates from {forecast_dates[0]} to {forecast_dates[-1]}")
     except Exception as e:
         # Handle date conversion issues
-        forecast_dates = pd.date_range(start=pd.Timestamp.today(), periods=days_to_forecast)
+        print(f"Error creating forecast dates with business days: {str(e)}")
+        forecast_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=days_to_forecast)
+        print(f"Using regular date range instead: {forecast_dates[0]} to {forecast_dates[-1]}")
     
     # Find YTD data for better visualization
     try:
         current_year = last_date.year
         start_of_year = pd.Timestamp(year=current_year, month=1, day=1)
         ytd_data = data[data.index >= start_of_year]
-        if len(ytd_data) < 5:  # If not enough YTD data, use last 60 days
+        if len(ytd_data) < 20:  # If not enough YTD data, use last 60 days
             ytd_data = data.tail(60)
-    except:
+            print(f"Not enough YTD data ({len(ytd_data)} rows), using last 60 days instead")
+        else:
+            print(f"Using YTD data with {len(ytd_data)} rows for historical context")
+    except Exception as e:
         # Fallback to last 60 days if year calculation fails
+        print(f"Error calculating YTD data: {str(e)}")
         ytd_data = data.tail(60)
+        print(f"Fallback: Using last 60 days ({len(ytd_data)} rows) for historical context")
     
     # Use the model to make predictions using ML model
     try:
         # Get the most recent market data for prediction
         recent_data = data.tail(1)
+        print(f"Using most recent data from {recent_data.index[0]} for prediction")
         
         # Check if we have all required features
-        if len(recent_data) > 0 and all(feature in recent_data.columns for feature in features):
+        features_available = all(feature in recent_data.columns for feature in features)
+        print(f"All features available for prediction: {features_available}")
+        
+        if len(recent_data) > 0 and features_available:
             # Get the ML model prediction 
             pred_return = predict_returns(model_result, recent_data, features)
+            print(f"ML model predicted return: {pred_return:.2f}%")
             
             if pred_return is not None:
                 # Identify which target period the model was trained on (1W, 1M, 3M, etc.)
                 # This helps scale our predictions appropriately
                 target_column = model_result.get('target_column', 'Fwd_Ret_1M')
                 target_period = target_column.replace('Fwd_Ret_', '') if 'Fwd_Ret_' in target_column else '1M'
+                print(f"Model was trained for {target_period} returns prediction")
                 
                 # Map target periods to approximate trading days for proper scaling
                 trading_days_map = {'1W': 5, '1M': 21, '3M': 63, '6M': 126, '1Y': 252, '3Y': 756}
@@ -507,6 +596,7 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=30, tit
                 
                 # Scale prediction to daily returns (approximate)
                 daily_return = pred_return / target_days
+                print(f"Scaled to daily return: {daily_return:.4f}% per day")
                 
                 # Generate forecast prices with compound growth using ML prediction
                 forecast_prices = [last_price]
