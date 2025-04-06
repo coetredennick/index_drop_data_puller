@@ -122,6 +122,16 @@ def show_ml_predictions():
     # Tabs for different model configurations
     st.markdown("#### Forecast Configuration")
     
+    # Show the current drop threshold from main settings
+    st.markdown(f"""
+    <div style="margin-bottom: 15px; padding: 8px 12px; background-color: #f0f8ff; border-left: 3px solid #1E88E5; border-radius: 4px;">
+        <p style="margin: 0; font-size: 0.85rem;">
+            <strong>Using Drop Threshold:</strong> {st.session_state.drop_threshold:.1f}% 
+            <span style="color: #666; font-style: italic;">(synchronized with main settings)</span>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
     # Forecast settings in a cleaner layout
     col1, col2 = st.columns(2)
     
@@ -172,10 +182,11 @@ def show_ml_predictions():
     if train_model_button:
         with st.spinner(f"Training {model_type} model for {target_period} forecasting..."):
             # Prepare features - focusing on major market events
+            # Use the same drop threshold as set in the main application settings
             data, features = prepare_features(
                 st.session_state.data,
                 focus_on_drops=True,  # Focus on significant market events
-                drop_threshold=-2.0   # Consider -2% or worse as significant events
+                drop_threshold=-abs(st.session_state.drop_threshold)  # Use the same threshold from main settings
             )
             
             # Select target column for the model
@@ -224,11 +235,11 @@ def show_ml_predictions():
         </div>
         """, unsafe_allow_html=True)
     else:
-        # Get features for forecasting
+        # Get features for forecasting - using the same threshold from main settings
         _, features = prepare_features(
             st.session_state.data,
             focus_on_drops=True,
-            drop_threshold=-2.0
+            drop_threshold=-abs(st.session_state.drop_threshold)
         )
         
         # Extract model target information
