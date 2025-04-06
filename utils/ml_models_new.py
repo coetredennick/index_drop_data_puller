@@ -626,26 +626,42 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
                 trading_days_map = {'1W': 5, '1M': 21, '3M': 63, '6M': 126, '1Y': 252, '3Y': 756}
                 target_days = trading_days_map.get(target_period, 21)  # Default to 1M if unknown
                 
-                # Scale prediction to daily returns (approximate)
-                daily_return = pred_return / target_days
+                # Calculate total predicted return for target period
+                # e.g., if model predicts 5% for 1 month, that's our total expected return
+                total_predicted_return = pred_return
+                
+                # Limit extreme predictions to realistic bounds based on historical data
+                # Even in extreme cases like 1987 crash, daily returns rarely exceed -20% or +15%
+                if total_predicted_return > 100:  # Cap extremely high predictions
+                    print(f"WARNING: Capping extremely high prediction: {total_predicted_return}% to 50%")
+                    total_predicted_return = 50.0
+                elif total_predicted_return < -50:  # Cap extremely low predictions
+                    print(f"WARNING: Capping extremely low prediction: {total_predicted_return}% to -40%")
+                    total_predicted_return = -40.0
+                
+                # Convert to daily rate - for smoother forecasting
+                # Using a compound daily rate that would result in the predicted return over target_days
+                daily_return = ((1 + total_predicted_return/100) ** (1/target_days) - 1) * 100
                 
                 # Generate forecast prices with compound growth using ML prediction
                 forecast_prices = [last_price]
                 
+                # Historical volatility - for realistic variations
+                volatility = min(2.0, data['Return'].std() * 0.2)  # Dampen historical volatility
+                
                 for i in range(days_to_forecast):
                     # Create more realistic variations in daily returns
                     # Less variation in near term, more variation further out
-                    rmse = float(model_result['metrics'].get('rmse_test', 2.0))
                     time_factor = min(1.0, i / (days_to_forecast * 0.3))
-                    variation_scale = float(rmse * 0.1 * (1 + time_factor))
+                    variation_scale = float(volatility * (1 + time_factor))
                     
                     # Add some realistic market behavior variation
                     variation = float(np.random.normal(0, variation_scale))
                     
-                    # Daily return with appropriate variation
-                    day_return = float(daily_return + variation)
+                    # Daily return with appropriate variation - small variations like real markets
+                    day_return = float(daily_return + variation * 0.05)
                     
-                    # Calculate next price with compounding
+                    # Calculate next price with compounding - more realistic
                     next_price = forecast_prices[-1] * (1 + day_return/100)
                     forecast_prices.append(next_price)
                 
@@ -654,7 +670,10 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
                 
                 # Calculate confidence intervals for specific time horizons
                 confidence_intervals = {}
-                rmse = model_result['metrics'].get('rmse_test', 2.0)
+                
+                # Get RMSE from model metrics, but limit it to realistic values
+                # A typical RMSE for S&P 500 weekly returns is around 2-4%
+                rmse = min(8.0, max(1.0, model_result['metrics'].get('rmse_test', 2.5)))
                 
                 # Define confidence levels (95%, 80%, 70%)
                 confidence_levels = {
@@ -673,12 +692,22 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
                         # Calculate percentage change from current price
                         pct_change = ((price_at_horizon / last_price) - 1) * 100
                         
+                        # Ensure the percentage change is realistic
+                        # Even in extreme market events, 3-month losses rarely exceed 35-40%
+                        if pct_change < -40:
+                            print(f"WARNING: Extreme negative forecast {pct_change:.1f}% capped at -35%")
+                            pct_change = -35.0
+                            # Adjust the price accordingly
+                            price_at_horizon = last_price * (1 + pct_change/100)
+                            forecast_prices[days-1] = price_at_horizon
+                            
                         # Calculate confidence intervals with different levels
                         intervals = {}
                         for conf_level, z_score in confidence_levels.items():
-                            # Uncertainty grows with square root of time
-                            time_factor = np.sqrt(days / 5)
-                            uncertainty = (rmse * z_score * time_factor) / 100
+                            # Uncertainty grows with square root of time but with caps
+                            # S&P 500 historical data suggests confidence intervals shouldn't be too wide
+                            time_factor = min(4.0, np.sqrt(days / 5))
+                            uncertainty = min(0.30, (rmse * z_score * time_factor) / 100)
                             
                             intervals[conf_level] = {
                                 'lower': price_at_horizon * (1 - uncertainty),
@@ -700,10 +729,10 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
                 lower_prices_95 = []
                 
                 for i, price in enumerate(forecast_prices):
-                    # Uncertainty grows with square root of time
+                    # Uncertainty grows with square root of time but capped for realism
                     days_out = int(i + 1)
-                    time_factor = float(np.sqrt(days_out / 5))
-                    uncertainty = float((rmse * 1.96 * time_factor) / 100)  # Using 95% confidence
+                    time_factor = min(4.0, float(np.sqrt(days_out / 5)))
+                    uncertainty = min(0.30, float((rmse * 1.96 * time_factor) / 100))  # Using 95% confidence
                     
                     upper_prices_95.append(price * (1 + uncertainty))
                     lower_prices_95.append(price * (1 - uncertainty))
