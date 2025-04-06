@@ -6,9 +6,9 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from datetime import datetime, timedelta
 
-def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", height=500):
+def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", height=700):
     """
-    Create an interactive price chart with marked drop events
+    Create an interactive price chart with marked drop events, VIX, and RSI panels
     
     Parameters:
     -----------
@@ -26,9 +26,22 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
     plotly.graph_objects.Figure
         Interactive price chart
     """
-    # Create figure with secondary y-axis
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    # Create figure with 3 rows for price+volume, VIX, and RSI
+    fig = make_subplots(
+        rows=3, 
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        row_heights=[0.6, 0.2, 0.2],
+        specs=[
+            [{"secondary_y": True}],  # Price chart with volume on secondary y-axis
+            [{"secondary_y": False}],  # VIX
+            [{"secondary_y": False}]   # RSI
+        ],
+        subplot_titles=["S&P 500 Price & Volume", "VIX (Volatility)", "RSI (14-day)"]
+    )
     
+    # PANEL 1: PRICE & VOLUME
     # Add price trace
     fig.add_trace(
         go.Scatter(
@@ -38,10 +51,10 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
             line=dict(color='#0E6EFD', width=1.5),
             opacity=0.8,
         ),
-        secondary_y=False,
+        row=1, col=1, secondary_y=False,
     )
     
-    # Add volume trace
+    # Add volume trace on secondary y-axis
     fig.add_trace(
         go.Bar(
             x=data.index,
@@ -50,8 +63,46 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
             marker=dict(color='rgba(192, 192, 192, 0.5)'),
             opacity=0.4,
         ),
-        secondary_y=True,
+        row=1, col=1, secondary_y=True,
     )
+    
+    # PANEL 2: VIX (if available)
+    if 'ATR_Pct' in data.columns:  # Use ATR as a proxy for volatility if VIX not available
+        fig.add_trace(
+            go.Scatter(
+                x=data.index,
+                y=data['ATR_Pct'],
+                name="Volatility (ATR)",
+                line=dict(color='#FF9800', width=1.5),
+                fill='tozeroy',
+                fillcolor='rgba(255, 152, 0, 0.1)',
+            ),
+            row=2, col=1, secondary_y=False,
+        )
+    
+    # PANEL 3: RSI
+    if 'RSI_14' in data.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=data.index,
+                y=data['RSI_14'],
+                name="RSI (14)",
+                line=dict(color='#673AB7', width=1.5),
+            ),
+            row=3, col=1, secondary_y=False,
+        )
+        
+        # Add horizontal lines for RSI at 30 and 70 (typical oversold/overbought thresholds)
+        fig.add_shape(
+            type="line", x0=data.index[0], x1=data.index[-1], y0=30, y1=30,
+            line=dict(color="green", width=1, dash="dash"),
+            row=3, col=1
+        )
+        fig.add_shape(
+            type="line", x0=data.index[0], x1=data.index[-1], y0=70, y1=70,
+            line=dict(color="red", width=1, dash="dash"),
+            row=3, col=1
+        )
     
     # Add drop event markers if provided
     if drop_events:
@@ -78,7 +129,7 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
                     text=[f"{e['date'].strftime('%Y-%m-%d')}: {e['drop_pct']:.2f}%" for e in single_day_events],
                     hoverinfo="text",
                 ),
-                secondary_y=False,
+                row=1, col=1, secondary_y=False,
             )
         
         # Extract consecutive drop events
@@ -108,16 +159,20 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
                         fillcolor="rgba(255, 0, 0, 0.1)",
                         opacity=0.5,
                         layer="below",
+                        row=1, col=1
                     )
     
     # Update layout
     fig.update_layout(
         title=title,
-        xaxis_title="Date",
-        yaxis_title="Price ($)",
         height=height,
         template="plotly_white",
         hovermode="x unified",
+        # Update subplot y-axis titles
+        yaxis=dict(title="Price ($)"),
+        yaxis2=dict(title="Volume", showgrid=False, tickformat=".2s"),
+        yaxis3=dict(title="Volatility (%)"),
+        yaxis4=dict(title="RSI"),
         legend=dict(
             orientation="h",
             yanchor="bottom",
