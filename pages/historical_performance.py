@@ -335,7 +335,7 @@ def show_historical_performance():
         
         # For totals row
         if val == 'TOTALS' or val == 'All Types':
-            return 'background-color: #333333; color: white; font-weight: bold'
+            return 'background-color: #f0f4f8; color: #0056b3; font-weight: bold'
             
         return ''
     
@@ -349,14 +349,35 @@ def show_historical_performance():
     # Apply styling with formatting and smaller text using map (replaces deprecated applymap)
     styled_events_df = events_df.style.map(color_cell).format(format_dict)
     
-    # Add custom CSS for smaller font and compact layout with border before total column
+    # Add custom CSS for smaller font and compact layout with more distinct totals
     styled_events_df = styled_events_df.set_table_styles([
         {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]},
-        {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]},
-        # Add left border to the Total Avg column
-        {'selector': 'td:nth-child(10), th:nth-child(10)', 'props': [('border-left', '2px solid #333')]},
-        # Add top border to the last row (totals)
-        {'selector': 'tr:last-child td', 'props': [('border-top', '2px solid #333')]}
+        {'selector': 'th', 'props': [
+            ('font-size', '10px'), 
+            ('padding', '2px 5px'), 
+            ('white-space', 'nowrap'),
+            ('background-color', '#e9ecef'),  # Slightly darker background for headers
+            ('border-bottom', '1px solid #adb5bd'),  # Border under headers
+            ('text-align', 'center')  # Center-align headers
+        ]},
+        
+        # Make the Total Avg column more distinct
+        {'selector': 'td:nth-child(10), th:nth-child(10)', 'props': [
+            ('border-left', '2px solid #333'),
+            ('background-color', '#f0f4f8'),  # Light blue-gray background
+            ('font-weight', 'bold'),
+            ('color', '#0056b3')  # Blue text for totals column
+        ]},
+        
+        # Make the totals row more distinct
+        {'selector': 'tr:last-child td', 'props': [
+            ('border-top', '2px solid #333'),
+            ('border-bottom', '2px solid #333'),
+            ('background-color', '#f0f4f8'),  # Light blue-gray background
+            ('font-weight', 'bold'),
+            ('font-size', '11px'),  # Slightly larger font for totals
+            ('color', '#0056b3')    # Blue text for totals row
+        ]}
     ])
     
     # Display the table
