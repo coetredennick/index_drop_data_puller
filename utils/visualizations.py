@@ -106,8 +106,17 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
     
     # Add drop event markers if provided
     if drop_events:
-        # Extract single-day drop events
-        single_day_events = [e for e in drop_events if e['type'] == 'single_day']
+        # Check if there's a filter in session state
+        current_filter = 'all'
+        if 'current_event_type_filter' in st.session_state:
+            current_filter = st.session_state.current_event_type_filter
+        
+        # Extract single-day drop events (only if allowed by filter)
+        if current_filter in ['all', 'single_day']:
+            single_day_events = [e for e in drop_events if e['type'] == 'single_day']
+        else:
+            single_day_events = []
+            
         if single_day_events:
             event_dates = [e['date'] for e in single_day_events]
             event_prices = [data.loc[date, 'Close'] if date in data.index else None for date in event_dates]
@@ -205,8 +214,12 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
                         row=3, col=1,
                     )
         
-        # Extract consecutive drop events
-        consecutive_events = [e for e in drop_events if e['type'] == 'consecutive']
+        # Extract consecutive drop events (only if allowed by filter)
+        if current_filter in ['all', 'consecutive']:
+            consecutive_events = [e for e in drop_events if e['type'] == 'consecutive']
+        else:
+            consecutive_events = []
+            
         if consecutive_events:
             for event in consecutive_events:
                 # Add rectangle to highlight consecutive drop period
@@ -862,9 +875,38 @@ def create_distribution_histogram(drop_events, title="Distribution of Drop Event
         )
         return fig
     
+    # Check if there's a filter in session state
+    current_filter = 'all'
+    if 'current_event_type_filter' in st.session_state:
+        current_filter = st.session_state.current_event_type_filter
+    
+    # Filter events based on the current filter
+    filtered_events = []
+    if current_filter == 'all':
+        filtered_events = drop_events
+    else:
+        filtered_events = [e for e in drop_events if e['type'] == current_filter]
+    
+    # If no events match the filter
+    if not filtered_events:
+        fig = go.Figure()
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                text=f"No {current_filter} events to display",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False
+            )],
+            height=height
+        )
+        return fig
+    
     # Extract drop percentages
     drops = []
-    for event in drop_events:
+    for event in filtered_events:
         if event['type'] == 'single_day':
             drops.append(abs(event['drop_pct']))
         else:
