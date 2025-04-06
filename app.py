@@ -12,7 +12,6 @@ from utils.data_fetcher import fetch_sp500_data, cache_data
 from utils.technical_indicators import calculate_technical_indicators
 from utils.event_detection import detect_drop_events, detect_consecutive_drops
 from pages.historical_performance import show_historical_performance
-from pages.drop_events import show_drop_events
 from pages.ml_predictions import show_ml_predictions
 
 # Configure the page
@@ -314,7 +313,6 @@ with st.spinner("Fetching S&P 500 data..."):
 # Create tabs with icons for better visual organization
 tabs = st.tabs([
     "📈 Historical Performance", 
-    "🔍 Drop Events Analysis", 
     "🤖 ML Predictions"
 ])
 
@@ -326,9 +324,6 @@ with tabs[0]:
     show_historical_performance()
 
 with tabs[1]:
-    show_drop_events()
-
-with tabs[2]:
     show_ml_predictions()
 
 # Add footer
