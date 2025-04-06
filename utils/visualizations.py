@@ -432,29 +432,62 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
     plotly.graph_objects.Figure
         Recovery chart
     """
+    # Error handling: Check if event is None or empty
+    if event is None or not isinstance(event, dict):
+        fig = go.Figure()
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                text="No event data available",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False
+            )],
+            height=height
+        )
+        return fig
+    
     # Determine the range of data to display
-    if event['type'] == 'single_day':
-        start_date = event['date'] - timedelta(days=5)
-        event_date = event['date']
-    else:
-        start_date = event['start_date'] - timedelta(days=5)
-        event_date = event['date']
-    
-    # Get one year of data after the event or as much as is available
-    end_date = event_date + timedelta(days=365)
-    current_date = datetime.now().date()
-    
-    # Make sure all dates are converted to pandas Timestamps for compatibility with DatetimeIndex
-    start_ts = pd.Timestamp(start_date)
-    end_ts = pd.Timestamp(end_date)
-    
-    # Ensure we don't try to get data from the future
-    if end_ts > pd.Timestamp(datetime.now()):
-        end_ts = pd.Timestamp(datetime.now())
-    
-    # Filter data for the selected period
-    mask = (data.index >= start_ts) & (data.index <= end_ts)
-    period_data = data.loc[mask].copy()
+    try:
+        if event['type'] == 'single_day':
+            # Ensure date is a pandas Timestamp
+            event_date = pd.Timestamp(event['date']) if not isinstance(event['date'], pd.Timestamp) else event['date']
+            start_date = event_date - pd.Timedelta(days=5)
+        else:
+            # Ensure dates are pandas Timestamps
+            event_date = pd.Timestamp(event['date']) if not isinstance(event['date'], pd.Timestamp) else event['date']
+            start_date = pd.Timestamp(event['start_date']) if not isinstance(event['start_date'], pd.Timestamp) else event['start_date']
+            start_date = start_date - pd.Timedelta(days=5)
+        
+        # Get one year of data after the event or as much as is available
+        end_date = event_date + pd.Timedelta(days=365)
+        
+        # Ensure we don't try to get data from the future
+        if end_date > pd.Timestamp(datetime.now()):
+            end_date = pd.Timestamp(datetime.now())
+        
+        # Filter data for the selected period
+        mask = (data.index >= start_date) & (data.index <= end_date)
+        period_data = data.loc[mask].copy()
+    except Exception as e:
+        # Handle any errors in date processing
+        print(f"Error processing dates in recovery chart: {e}")
+        fig = go.Figure()
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                text=f"Error processing event dates: {str(e)}",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False
+            )],
+            height=height
+        )
+        return fig
     
     if period_data.empty:
         # No data available
@@ -531,48 +564,80 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
         )
     else:
         # Consecutive drop event - mark start and end dates
-        start_date = event['start_date']
+        try:
+            # Ensure date is a pandas Timestamp
+            start_date = pd.Timestamp(event['start_date']) if not isinstance(event['start_date'], pd.Timestamp) else event['start_date']
+            
+            # Initialize start_normalized with a default value
+            start_normalized = None
+            
+            try:
+                # Calculate the normalized value for the start date
+                if start_date in period_data.index and 'Close' in period_data.columns:
+                    start_price = period_data.loc[start_date, 'Close']
+                    if pd.notna(start_price) and pd.notna(event_price) and event_price != 0:  # Avoid division by zero
+                        start_normalized = (start_price / event_price - 1) * 100
+                else:
+                    # If start date is not in the data, use the closest date
+                    if not period_data.empty:
+                        closest_date = period_data.index[period_data.index.get_indexer([start_date], method='nearest')[0]]
+                        if closest_date in period_data.index and 'Close' in period_data.columns:
+                            start_price = period_data.loc[closest_date, 'Close']
+                            if pd.notna(start_price) and pd.notna(event_price) and event_price != 0:
+                                start_normalized = (start_price / event_price - 1) * 100
+                                start_date = closest_date
+            except Exception as e:
+                print(f"Error calculating start_normalized: {e}")
+                # Continue without setting start_normalized if there's an error
+            
+            # Add area to highlight the drop period
+            # Make sure we're dealing with valid date range within our data
+            range_start = max(start_date, period_data.index[0])
+            range_end = min(event_date, period_data.index[-1])
+            
+            # Only proceed if we have a valid date range
+            if range_start <= range_end and not period_data.loc[range_start:range_end].empty:
+                y_min = min(0, period_data.loc[range_start:range_end, 'Normalized'].min()) - 1
+                y_max = max(0, period_data.loc[range_start:range_end, 'Normalized'].max()) + 1
+                
+                fig.add_shape(
+                    type="rect",
+                    x0=start_date,
+                    x1=event_date,
+                    y0=y_min,
+                    y1=y_max,
+                    fillcolor="rgba(255, 0, 0, 0.1)",
+                    line=dict(color="rgba(255, 0, 0, 0.5)"),
+                    layer="below",
+                )
+        except Exception as e:
+            print(f"Error highlighting consecutive drop period: {e}")
+            # Continue without the highlighting if there's an error
         
-        # Calculate the normalized value for the start date
-        if start_date in period_data.index:
-            start_price = period_data.loc[start_date, 'Close']
-            start_normalized = (start_price / event_price - 1) * 100
-        else:
-            # If start date is not in the data, use the closest date
-            closest_date = period_data.index[period_data.index.get_indexer([start_date], method='nearest')[0]]
-            start_price = period_data.loc[closest_date, 'Close']
-            start_normalized = (start_price / event_price - 1) * 100
-            start_date = closest_date
-        
-        # Add area to highlight the drop period
-        fig.add_shape(
-            type="rect",
-            x0=start_date,
-            x1=event_date,
-            y0=min(0, period_data.loc[start_date:event_date, 'Normalized'].min()) - 1,
-            y1=max(0, period_data.loc[start_date:event_date, 'Normalized'].max()) + 1,
-            fillcolor="rgba(255, 0, 0, 0.1)",
-            line=dict(color="rgba(255, 0, 0, 0.5)"),
-            layer="below",
-        )
-        
-        # Add markers for start and end dates
-        fig.add_trace(
-            go.Scatter(
-                x=[start_date, event_date],
-                y=[start_normalized, 0],
-                mode='markers+text',
-                marker=dict(
-                    size=10,
-                    color=['orange', 'red'],
-                    symbol=['circle', 'triangle-down']
-                ),
-                text=['Start', 'End'],
-                textposition='top center',
-                name=f"Drop Period ({event['cumulative_drop']:.2f}% over {event['num_days']} days)",
-                hoverinfo="name",
-            )
-        )
+        # Add markers for start and end dates with a safety check for start_normalized
+        try:
+            # Ensure start_normalized is defined and has a value
+            if start_normalized is not None:
+                fig.add_trace(
+                    go.Scatter(
+                        x=[start_date, event_date],
+                        y=[start_normalized, 0],
+                        mode='markers+text',
+                        marker=dict(
+                            size=10,
+                            color=['orange', 'red'],
+                            symbol=['circle', 'triangle-down']
+                        ),
+                        text=['Start', 'End'],
+                        textposition='top center',
+                        name=f"Drop Period ({event['cumulative_drop']:.2f}% over {event['num_days']} days)",
+                        hoverinfo="name",
+                    )
+                )
+            else:
+                print("Warning: start_normalized is None, cannot add start/end markers")
+        except Exception as e:
+            print(f"Error adding consecutive drop markers in recovery chart: {e}")
     
     # Add reference lines for standard time periods
     time_periods = [
@@ -583,33 +648,40 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
     ]
     
     for days, label, color in time_periods:
-        # Calculate the date for this time period
-        period_date = event_date + timedelta(days=days)
-        
-        # Only add if the date is within our data range
-        if period_date <= period_data.index[-1]:
-            fig.add_shape(
-                type="line",
-                x0=period_date,
-                x1=period_date,
-                y0=min(period_data['Normalized']) - 2,
-                y1=max(period_data['Normalized']) + 2,
-                line=dict(
-                    color=color,
-                    width=1,
-                    dash="dot",
-                ),
-            )
+        try:
+            # Calculate the date for this time period using pandas Timedelta for consistency
+            period_date = event_date + pd.Timedelta(days=days)
             
-            # Add text annotation
-            fig.add_annotation(
-                x=period_date,
-                y=max(period_data['Normalized']) + 2,
-                text=label,
-                showarrow=False,
-                yshift=10,
-                font=dict(size=10, color="black")
-            )
+            # Only add if the date is within our data range
+            if period_date <= period_data.index[-1]:
+                y_min = min(period_data['Normalized']) - 2
+                y_max = max(period_data['Normalized']) + 2
+                
+                fig.add_shape(
+                    type="line",
+                    x0=period_date,
+                    x1=period_date,
+                    y0=y_min,
+                    y1=y_max,
+                    line=dict(
+                        color=color,
+                        width=1,
+                        dash="dot",
+                    ),
+                )
+                
+                # Add text annotation
+                fig.add_annotation(
+                    x=period_date,
+                    y=y_max,
+                    text=label,
+                    showarrow=False,
+                    yshift=10,
+                    font=dict(size=10, color="black")
+                )
+        except Exception as e:
+            print(f"Error adding reference line for {label}: {e}")
+            # Continue without this reference line if there's an error
     
     # Update layout
     fig.update_layout(
@@ -663,28 +735,62 @@ def create_technical_indicator_chart(data, event, indicator, title=None, height=
     if title is None:
         title = f"{indicator} Around Drop Event"
     
+    # Error handling: Check if event is None or empty
+    if event is None or not isinstance(event, dict):
+        fig = go.Figure()
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                text="No event data available",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False
+            )],
+            height=height
+        )
+        return fig
+    
     # Determine the range of data to display
-    if event['type'] == 'single_day':
-        start_date = event['date'] - timedelta(days=30)
-        event_date = event['date']
-    else:
-        start_date = event['start_date'] - timedelta(days=30)
-        event_date = event['date']
-    
-    # Get 60 days of data after the event or as much as is available
-    end_date = event_date + timedelta(days=60)
-    
-    # Make sure all dates are converted to pandas Timestamps for compatibility with DatetimeIndex
-    start_ts = pd.Timestamp(start_date)
-    end_ts = pd.Timestamp(end_date)
-    
-    # Ensure we don't try to get data from the future
-    if end_ts > pd.Timestamp(datetime.now()):
-        end_ts = pd.Timestamp(datetime.now())
-    
-    # Filter data for the selected period
-    mask = (data.index >= start_ts) & (data.index <= end_ts)
-    period_data = data.loc[mask].copy()
+    try:
+        if event['type'] == 'single_day':
+            # Ensure date is a pandas Timestamp
+            event_date = pd.Timestamp(event['date']) if not isinstance(event['date'], pd.Timestamp) else event['date']
+            start_date = event_date - pd.Timedelta(days=30)
+        else:
+            # Ensure dates are pandas Timestamps
+            event_date = pd.Timestamp(event['date']) if not isinstance(event['date'], pd.Timestamp) else event['date']
+            start_date = pd.Timestamp(event['start_date']) if not isinstance(event['start_date'], pd.Timestamp) else event['start_date']
+            start_date = start_date - pd.Timedelta(days=30)
+        
+        # Get 60 days of data after the event or as much as is available
+        end_date = event_date + pd.Timedelta(days=60)
+        
+        # Ensure we don't try to get data from the future
+        if end_date > pd.Timestamp(datetime.now()):
+            end_date = pd.Timestamp(datetime.now())
+        
+        # Filter data for the selected period
+        mask = (data.index >= start_date) & (data.index <= end_date)
+        period_data = data.loc[mask].copy()
+    except Exception as e:
+        # Handle any errors in date processing
+        print(f"Error processing dates in technical indicator chart: {e}")
+        fig = go.Figure()
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                text=f"Error processing event dates: {str(e)}",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False
+            )],
+            height=height
+        )
+        return fig
     
     if period_data.empty or indicator not in period_data.columns:
         # No data available
@@ -749,27 +855,39 @@ def create_technical_indicator_chart(data, event, indicator, title=None, height=
         )
     else:
         # Consecutive drop event - mark start and end dates
-        start_date = event['start_date']
-        
-        # Add markers for start and end dates
-        fig.add_trace(
-            go.Scatter(
-                x=[start_date, event_date],
-                y=[
-                    period_data.loc[start_date, indicator] if start_date in period_data.index else None,
-                    period_data.loc[event_date, indicator] if event_date in period_data.index else None
-                ],
-                mode='markers',
-                marker=dict(
-                    size=10,
-                    color=['orange', 'red'],
-                    symbol=['circle', 'triangle-down']
+        try:
+            # Ensure date is a pandas Timestamp
+            start_date = pd.Timestamp(event['start_date']) if not isinstance(event['start_date'], pd.Timestamp) else event['start_date']
+            
+            # Add markers for start and end dates
+            marker_y = [None, None]
+            
+            # Safely get values for the start date
+            if start_date in period_data.index and indicator in period_data.columns:
+                marker_y[0] = period_data.loc[start_date, indicator]
+            
+            # Safely get values for the event date
+            if event_date in period_data.index and indicator in period_data.columns:
+                marker_y[1] = period_data.loc[event_date, indicator]
+                
+            fig.add_trace(
+                go.Scatter(
+                    x=[start_date, event_date],
+                    y=marker_y,
+                    mode='markers',
+                    marker=dict(
+                        size=10,
+                        color=['orange', 'red'],
+                        symbol=['circle', 'triangle-down']
+                    ),
+                    name=f"Drop Period ({event['cumulative_drop']:.2f}% over {event['num_days']} days)",
+                    hoverinfo="name",
                 ),
-                name=f"Drop Period ({event['cumulative_drop']:.2f}% over {event['num_days']} days)",
-                hoverinfo="name",
-            ),
-            secondary_y=False,
-        )
+                secondary_y=False,
+            )
+        except Exception as e:
+            print(f"Error adding consecutive drop markers: {e}")
+            # Continue without these markers if there's an error
     
     # Add reference lines for indicator if needed
     if indicator == 'RSI_14':
