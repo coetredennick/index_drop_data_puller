@@ -13,7 +13,6 @@ from utils.technical_indicators import calculate_technical_indicators
 from utils.event_detection import detect_drop_events, detect_consecutive_drops
 from pages.historical_performance import show_historical_performance
 from pages.drop_events import show_drop_events
-from pages.current_market import show_current_market
 from pages.ml_predictions import show_ml_predictions
 
 # Configure the page
@@ -315,7 +314,6 @@ with st.spinner("Fetching S&P 500 data..."):
 tabs = st.tabs([
     "📈 Historical Performance", 
     "🔍 Drop Events Analysis", 
-    "📊 Current Market", 
     "🤖 ML Predictions"
 ])
 
@@ -330,9 +328,6 @@ with tabs[1]:
     show_drop_events()
 
 with tabs[2]:
-    show_current_market()
-
-with tabs[3]:
     show_ml_predictions()
 
 # Add footer
