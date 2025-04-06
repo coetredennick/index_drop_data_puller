@@ -300,10 +300,28 @@ def show_drop_events():
                     'Volume vs Avg': '{:.1f}x'
                 })
                 
-                # Add custom CSS for smaller font and more compact layout
+                # Add custom CSS for smaller font and more compact layout with distinct totals
                 styled_price_data = styled_price_data.set_table_styles([
                     {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]},
-                    {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]}
+                    {'selector': 'th', 'props': [
+                        ('font-size', '10px'), 
+                        ('padding', '2px 5px'), 
+                        ('white-space', 'nowrap'),
+                        ('background-color', '#e9ecef'),  # Slightly darker background for headers
+                        ('border-bottom', '1px solid #adb5bd'),  # Border under headers
+                        ('text-align', 'center')  # Center-align headers
+                    ]},
+                    
+                    # Make the last row (totals) more distinct
+                    {'selector': 'tr:last-child td', 'props': [
+                        ('border-top', '2px solid #333'),
+                        ('border-bottom', '2px solid #333'),
+                        ('background-color', '#f0f4f8'),  # Light blue-gray background
+                        ('font-weight', '900'),           # Extra bold text
+                        ('font-size', '11px'),            # Slightly larger font
+                        ('color', '#0056b3'),             # Blue text
+                        ('text-shadow', '0 0 0.2px #0056b3')  # Text shadow for emphasis
+                    ]}
                 ])
                 
                 # Apply color formatting using map (replacing deprecated applymap)
