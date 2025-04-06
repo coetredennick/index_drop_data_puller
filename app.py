@@ -190,7 +190,6 @@ if 'selected_event' not in st.session_state:
     st.session_state.selected_event = None
 
 # Main page settings in a clean container
-st.markdown("## 📊 Analysis Settings")
 # Use a form to prevent reloads when adjusting sliders
 with st.form(key="analysis_settings_form"):
     # Use two columns for a cleaner layout - left for dates, right for thresholds
