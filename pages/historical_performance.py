@@ -347,60 +347,69 @@ def show_historical_performance():
             format_dict[col] = lambda x: '{:.1f}%'.format(x) if isinstance(x, (int, float)) else x
     
     # Apply styling with formatting and smaller text using map (replaces deprecated applymap)
-    styled_events_df = events_df.style.map(color_cell).format(format_dict)
+    # Let's define custom CSS directly for the HTML table to ensure styling is preserved
+    # Create a custom HTML with our styling to ensure the right columns get formatted
     
-    # Add custom CSS for smaller font and compact layout with more distinct totals
-    styled_events_df = styled_events_df.set_table_styles([
-        {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]},
-        {'selector': 'th', 'props': [
-            ('font-size', '10px'), 
-            ('padding', '2px 5px'), 
-            ('white-space', 'nowrap'),
-            ('background-color', '#e9ecef'),  # Slightly darker background for headers
-            ('border-bottom', '1px solid #adb5bd'),  # Border under headers
-            ('text-align', 'center')  # Center-align headers
-        ]},
-        
-        # Make the Total Avg column more distinct
-        {'selector': 'td:nth-child(10), th:nth-child(10)', 'props': [
-            ('border-left', '2px solid #333'),
-            ('background-color', '#f0f4f8'),  # Light blue-gray background
-            ('font-weight', '900'),          # Extra bold text (900 is bolder than bold)
-            ('color', '#0056b3'),            # Blue text for totals column
-            ('text-shadow', '0 0 0.2px #0056b3')  # Text shadow for more emphasis
-        ]},
-        
-        # Make the totals row more distinct
-        {'selector': 'tr:last-child td', 'props': [
-            ('border-top', '2px solid #333'),
-            ('border-bottom', '2px solid #333'),
-            ('background-color', '#f0f4f8'),  # Light blue-gray background
-            ('font-weight', '900'),           # Extra bold text (900 is bolder than bold)
-            ('font-size', '11px'),            # Slightly larger font for totals
-            ('color', '#0056b3'),             # Blue text for totals row
-            ('text-shadow', '0 0 0.2px #0056b3')   # Text shadow for more emphasis
-        ]},
-        
-        # Make the intersection of totals row and column even more emphasized
-        {'selector': 'tr:last-child td:nth-child(10)', 'props': [
-            ('background-color', '#e6f0ff'),  # Slightly different background
-            ('font-weight', '900'),           # Extra bold text
-            ('font-size', '11px'),            # Slightly larger font
-            ('color', '#004494'),             # Darker blue for the intersection
-            ('text-shadow', '0 0 0.5px #004494')  # Stronger text shadow
-        ]}
-    ])
+    # First format the data values with our formatter
+    formatted_df = events_df.copy()
+    for col, fmt in format_dict.items():
+        if col in formatted_df.columns:
+            formatted_df[col] = formatted_df[col].map(lambda x: f"{x:{fmt}}" if pd.notna(x) else "")
     
-    # Display the table as HTML using markdown to avoid the internal scrollbar
-    # Streamlit's HTML display will use the main page scrollbar instead
-    st.markdown(
-        f"""
-        <div style="overflow-x: auto;">
-            {styled_events_df.to_html(escape=False, index=False)}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # Apply color formatting
+    html_content = "<div style='overflow-x: auto;'>"
+    html_content += "<table class='returns-table' style='width:100%; border-collapse: collapse;'>"
+    
+    # Add header row
+    html_content += "<tr>"
+    for col in formatted_df.columns:
+        html_content += f"<th style='font-size:11px; padding:4px 8px; text-align:center; background-color:#e9ecef; border-bottom:1px solid #adb5bd; white-space:nowrap;'>{col}</th>"
+    html_content += "</tr>"
+    
+    # Add data rows
+    row_count = len(formatted_df)
+    for i, (_, row) in enumerate(formatted_df.iterrows()):
+        is_last_row = i == row_count - 1
+        html_content += "<tr>"
+        
+        for j, (col, val) in enumerate(row.items()):
+            # Determine if this is the Total column (index 9)
+            is_total_col = j == 9  # 10th column (0-indexed)
+            
+            # Set the cell style based on position and value
+            cell_style = "font-size:10px; padding:2px 5px; white-space:nowrap; "
+            
+            # Add special formatting for the Total column
+            if is_total_col:
+                cell_style += "border-left:2px solid #333; background-color:#f0f4f8; font-weight:900; color:#0056b3; text-shadow:0 0 0.2px #0056b3; "
+            
+            # Add special formatting for the totals row
+            if is_last_row:
+                cell_style += "border-top:2px solid #333; border-bottom:2px solid #333; background-color:#f0f4f8; font-weight:900; font-size:11px; color:#0056b3; text-shadow:0 0 0.2px #0056b3; "
+            
+            # Add extra emphasis for the intersection of totals row and column
+            if is_last_row and is_total_col:
+                cell_style = "font-size:11px; padding:2px 5px; white-space:nowrap; border-top:2px solid #333; border-bottom:2px solid #333; border-left:2px solid #333; background-color:#e6f0ff; font-weight:900; color:#004494; text-shadow:0 0 0.5px #004494; "
+            
+            # Add color based on value (if it's a number)
+            try:
+                num_val = float(val.replace('%', '').replace(',', '')) if isinstance(val, str) else val
+                if pd.notna(num_val) and not is_last_row:  # Skip coloring for the totals row (already styled)
+                    if num_val < 0:
+                        cell_style += "color:#d60000; "  # Red for negative
+                    elif num_val > 0:
+                        cell_style += "color:#008800; "  # Green for positive
+            except (ValueError, AttributeError):
+                pass  # Not a number or empty, keep default styling
+            
+            html_content += f"<td style='{cell_style}'>{val}</td>"
+        
+        html_content += "</tr>"
+    
+    html_content += "</table></div>"
+    
+    # Display the custom HTML table
+    st.markdown(html_content, unsafe_allow_html=True)
     
     # Add download button for the detailed database
     if not events_df.empty:
