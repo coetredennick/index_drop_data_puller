@@ -80,6 +80,9 @@ def show_historical_performance():
         # Get the selected event type value
         selected_event_type = event_type_options[event_filter]
         
+        # Store selected event type in session state for use across the app
+        st.session_state.current_event_type_filter = selected_event_type
+        
         # Get events based on the selected filter
         all_events = get_all_events(event_type=selected_event_type)
         

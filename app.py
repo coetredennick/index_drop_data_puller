@@ -186,6 +186,8 @@ if 'consecutive_drop_events' not in st.session_state:
     st.session_state.consecutive_drop_events = None
 if 'selected_event' not in st.session_state:
     st.session_state.selected_event = None
+if 'current_event_type_filter' not in st.session_state:
+    st.session_state.current_event_type_filter = 'all'
 
 # Main page settings in a clean container
 # Use a form to prevent reloads when adjusting sliders
