@@ -404,16 +404,34 @@ def show_historical_performance():
             # Set the cell style based on position and value
             cell_style = "font-size:10px; padding:2px 5px; white-space:nowrap; "
             
-            # Add color based on value (if it's a number) for all cells except the total column
-            # This restores the green/red heatmap
+            # Add background color heatmap based on value (if it's a number) for all cells except the total column
+            # This creates a green-to-red heatmap with cell background colors
             try:
                 num_val = float(val.replace('%', '').replace(',', '')) if isinstance(val, str) else val
                 if pd.notna(num_val) and not is_last_row:  # Skip coloring for the totals row
-                    if not is_total_col:  # Apply red/green to all non-total columns
+                    if not is_total_col:  # Apply heatmap to all non-total columns
+                        # Create a gradient background color based on the value
                         if num_val < 0:
-                            cell_style += "color:#d60000; "  # Red for negative
+                            # Calculate intensity for negative values (red)
+                            intensity = min(abs(num_val) / 10.0, 1.0)  # Max intensity at -10% or lower
+                            # Create RGB components for a red background with varying intensity
+                            r = 255
+                            g = int(255 * (1 - intensity * 0.6))  # Keep some green to avoid pure red
+                            b = int(255 * (1 - intensity * 0.8))  # Less blue for more red appearance
+                            cell_style += f"background-color:rgb({r},{g},{b}); "
+                            # Add contrasting text color for better readability
+                            cell_style += "color:#000000; font-weight:500; "  # Black text
+                            
                         elif num_val > 0:
-                            cell_style += "color:#008800; "  # Green for positive
+                            # Calculate intensity for positive values (green)
+                            intensity = min(abs(num_val) / 10.0, 1.0)  # Max intensity at +10% or higher
+                            # Create RGB components for a green background with varying intensity
+                            r = int(255 * (1 - intensity * 0.8))  # Less red for more green appearance
+                            g = 255
+                            b = int(255 * (1 - intensity * 0.6))  # Keep some blue to avoid pure green
+                            cell_style += f"background-color:rgb({r},{g},{b}); "
+                            # Add contrasting text color for better readability
+                            cell_style += "color:#000000; font-weight:500; "  # Black text
             except (ValueError, AttributeError):
                 pass  # Not a number or empty, keep default styling
             
