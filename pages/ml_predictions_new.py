@@ -149,22 +149,26 @@ def show_ml_predictions():
     
     with col2:
         # Target period for predictions
+        target_period_options = ["1W", "1M", "3M", "6M", "1Y"]
+        target_period_days = {"1W": 5, "1M": 21, "3M": 63, "6M": 126, "1Y": 252}
+        
         target_period = st.selectbox(
             "Training Target",
-            options=["1W", "1M", "3M", "6M", "1Y"],
+            options=target_period_options,
             index=1,  # Default to 1M
             key="target_period",
             help="The time period for which the model will be trained to predict returns"
         )
     
-    # Add a forecast horizon selector
+    # Coordinated forecast horizon selector based on target period
+    recommended_days = target_period_days.get(target_period, 252)
     forecast_days = st.slider(
         "Forecast Horizon (Days)",
-        min_value=30, 
-        max_value=365,
-        value=252,  # Default to 1 year
-        step=30,
-        help="Number of days to forecast into the future"
+        min_value=max(5, recommended_days // 2), 
+        max_value=max(365, recommended_days * 4),
+        value=recommended_days,  # Default to match training target
+        step=max(5, recommended_days // 10),
+        help="Number of days to forecast into the future (auto-adjusted based on training target)"
     )
     
     # Create a simple "Train Model" button
@@ -258,12 +262,13 @@ def show_ml_predictions():
         st.markdown('</div>', unsafe_allow_html=True)
         
         # Add explanation of the forecast intervals
-        st.markdown("""
+        st.markdown(f"""
         <div style="margin: 0.5rem 0 1.5rem 0; padding: 0.7rem; background-color: rgba(240, 248, 255, 0.6); border-radius: 5px; border-left: 3px solid #1E88E5;">
             <p style="margin: 0; font-size: 0.9rem; color: #1E4A7B;"><strong>About the Forecast:</strong> 
-            This forecast shows the likely path of S&P 500 prices with confidence intervals widening over time. 
-            The model identifies key timeframes (1W, 1M, 3M, 1Y) with specific price targets and confidence levels.
+            This forecast is based on a model trained on <strong>{target_period}</strong> returns ({target_period_days.get(target_period, 252)} trading days) and projecting forward <strong>{forecast_days}</strong> trading days.
+            The model identifies key timeframes with specific price targets and confidence levels.
             Wider intervals indicate greater uncertainty in longer-term projections.</p>
+            <p style="margin: 0.3rem 0 0 0; font-size: 0.8rem; color: #666;"><em>Note: For best results, use a training target that matches your primary forecast horizon goal.</em></p>
         </div>
         """, unsafe_allow_html=True)
     
