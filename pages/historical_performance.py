@@ -365,8 +365,9 @@ def show_historical_performance():
         {'selector': 'td:nth-child(10), th:nth-child(10)', 'props': [
             ('border-left', '2px solid #333'),
             ('background-color', '#f0f4f8'),  # Light blue-gray background
-            ('font-weight', 'bold'),
-            ('color', '#0056b3')  # Blue text for totals column
+            ('font-weight', '900'),          # Extra bold text (900 is bolder than bold)
+            ('color', '#0056b3'),            # Blue text for totals column
+            ('text-shadow', '0 0 0.2px #0056b3')  # Text shadow for more emphasis
         ]},
         
         # Make the totals row more distinct
@@ -374,9 +375,19 @@ def show_historical_performance():
             ('border-top', '2px solid #333'),
             ('border-bottom', '2px solid #333'),
             ('background-color', '#f0f4f8'),  # Light blue-gray background
-            ('font-weight', 'bold'),
-            ('font-size', '11px'),  # Slightly larger font for totals
-            ('color', '#0056b3')    # Blue text for totals row
+            ('font-weight', '900'),           # Extra bold text (900 is bolder than bold)
+            ('font-size', '11px'),            # Slightly larger font for totals
+            ('color', '#0056b3'),             # Blue text for totals row
+            ('text-shadow', '0 0 0.2px #0056b3')   # Text shadow for more emphasis
+        ]},
+        
+        # Make the intersection of totals row and column even more emphasized
+        {'selector': 'tr:last-child td:nth-child(10)', 'props': [
+            ('background-color', '#e6f0ff'),  # Slightly different background
+            ('font-weight', '900'),           # Extra bold text
+            ('font-size', '11px'),            # Slightly larger font
+            ('color', '#004494'),             # Darker blue for the intersection
+            ('text-shadow', '0 0 0.5px #004494')  # Stronger text shadow
         ]}
     ])
     
