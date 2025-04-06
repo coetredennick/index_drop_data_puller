@@ -119,7 +119,67 @@ def show_historical_performance():
             delta=None
         )
         
-    # Add new row of metrics highlighting recovery stats
+
+    
+    # Show price chart with drop events marked
+    st.markdown("### S&P 500 Price Chart with Drop Events")
+    fig_price = create_price_chart(st.session_state.data, all_events)
+    st.plotly_chart(fig_price, use_container_width=True)
+    
+    # Calculate aggregate returns after drops for use in detailed DB
+    time_periods = ['1W', '1M', '3M', '6M', '1Y', '3Y']
+    
+    # Calculate metrics for later use
+    # Create a DataFrame for calculating aggregate metrics
+    agg_metrics = {}
+    severity_metrics = {}
+    
+    # Compute overall aggregates
+    for period in time_periods:
+        period_key = f'fwd_return_{period.lower()}'
+        period_returns = [event[period_key] for event in all_events if period_key in event and not pd.isna(event[period_key])]
+        
+        if period_returns:
+            agg_metrics[period] = {
+                'avg': np.mean(period_returns),
+                'med': np.median(period_returns),
+                'min': min(period_returns),
+                'max': max(period_returns),
+                'pos_pct': sum(1 for r in period_returns if r > 0) / len(period_returns) * 100
+            }
+        else:
+            agg_metrics[period] = {
+                'avg': None, 'med': None, 'min': None, 'max': None, 'pos_pct': None
+            }
+    
+    # Compute by severity
+    severity_groups = {}
+    for event in all_events:
+        severity = event['severity']
+        if severity not in severity_groups:
+            severity_groups[severity] = []
+        severity_groups[severity].append(event)
+    
+    severity_order = ['Severe', 'Major', 'Significant', 'Minor']
+    for severity in severity_order:
+        if severity in severity_groups:
+            events = severity_groups[severity]
+            severity_metrics[severity] = {'count': len(events)}
+            
+            for period in time_periods:
+                period_key = f'fwd_return_{period.lower()}'
+                period_returns = [event[period_key] for event in events if period_key in event and not pd.isna(event[period_key])]
+                
+                if period_returns:
+                    avg_return = np.mean(period_returns)
+                    positive_pct = sum(1 for r in period_returns if r > 0) / len(period_returns) * 100
+                    severity_metrics[severity][f'{period}_avg'] = avg_return
+                    severity_metrics[severity][f'{period}_pos'] = positive_pct
+                else:
+                    severity_metrics[severity][f'{period}_avg'] = None
+                    severity_metrics[severity][f'{period}_pos'] = None
+    
+    # Key Performance Metrics (moved to directly above the table)
     st.markdown("### Key Performance Metrics")
     
     metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
@@ -191,65 +251,7 @@ def show_historical_performance():
                 )
             else:
                 st.metric("Best vs Worst 1M", "N/A", delta=None)
-    
-    # Show price chart with drop events marked
-    st.markdown("### S&P 500 Price Chart with Drop Events")
-    fig_price = create_price_chart(st.session_state.data, all_events)
-    st.plotly_chart(fig_price, use_container_width=True)
-    
-    # Calculate aggregate returns after drops for use in detailed DB
-    time_periods = ['1W', '1M', '3M', '6M', '1Y', '3Y']
-    
-    # Calculate metrics for later use
-    # Create a DataFrame for calculating aggregate metrics
-    agg_metrics = {}
-    severity_metrics = {}
-    
-    # Compute overall aggregates
-    for period in time_periods:
-        period_key = f'fwd_return_{period.lower()}'
-        period_returns = [event[period_key] for event in all_events if period_key in event and not pd.isna(event[period_key])]
-        
-        if period_returns:
-            agg_metrics[period] = {
-                'avg': np.mean(period_returns),
-                'med': np.median(period_returns),
-                'min': min(period_returns),
-                'max': max(period_returns),
-                'pos_pct': sum(1 for r in period_returns if r > 0) / len(period_returns) * 100
-            }
-        else:
-            agg_metrics[period] = {
-                'avg': None, 'med': None, 'min': None, 'max': None, 'pos_pct': None
-            }
-    
-    # Compute by severity
-    severity_groups = {}
-    for event in all_events:
-        severity = event['severity']
-        if severity not in severity_groups:
-            severity_groups[severity] = []
-        severity_groups[severity].append(event)
-    
-    severity_order = ['Severe', 'Major', 'Significant', 'Minor']
-    for severity in severity_order:
-        if severity in severity_groups:
-            events = severity_groups[severity]
-            severity_metrics[severity] = {'count': len(events)}
-            
-            for period in time_periods:
-                period_key = f'fwd_return_{period.lower()}'
-                period_returns = [event[period_key] for event in events if period_key in event and not pd.isna(event[period_key])]
                 
-                if period_returns:
-                    avg_return = np.mean(period_returns)
-                    positive_pct = sum(1 for r in period_returns if r > 0) / len(period_returns) * 100
-                    severity_metrics[severity][f'{period}_avg'] = avg_return
-                    severity_metrics[severity][f'{period}_pos'] = positive_pct
-                else:
-                    severity_metrics[severity][f'{period}_avg'] = None
-                    severity_metrics[severity][f'{period}_pos'] = None
-    
     # Detailed Return Database (now combined with aggregates)
     st.markdown("### Market Drop Return Database with Aggregates")
     
