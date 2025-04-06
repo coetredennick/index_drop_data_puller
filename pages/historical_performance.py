@@ -359,7 +359,8 @@ def show_historical_performance():
     format_dict = {}
     for col in events_df.columns:
         if '%' in col:  # Format percentage columns
-            format_dict[col] = '{:.1f}%'
+            # Make sure we only format numeric values
+            format_dict[col] = lambda x: '{:.1f}%'.format(x) if isinstance(x, (int, float)) else x
     
     # Apply styling with formatting and smaller text using map (replaces deprecated applymap)
     styled_events_df = events_df.style.map(color_cell).format(format_dict)
