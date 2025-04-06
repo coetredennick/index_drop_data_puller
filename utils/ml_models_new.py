@@ -151,7 +151,23 @@ def train_model(data, features, target_column, model_type='random_forest', test_
         
         # Initialize the right model type
         if model_type == 'random_forest':
-            model = RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42)
+            # Optimized Random Forest parameters for financial time series forecasting
+            model = RandomForestRegressor(
+                n_estimators=200,               # More trees for better stability
+                max_depth=15,                   # Control depth to prevent overfitting
+                min_samples_split=5,            # Require more samples to split nodes
+                min_samples_leaf=4,             # Ensure leaf nodes have sufficient samples
+                max_features='sqrt',            # Use sqrt(n_features) for each split decision
+                bootstrap=True,                 # Use bootstrap samples
+                n_jobs=-1,                      # Use all available cores for training
+                criterion='squared_error',      # Mean squared error criterion
+                random_state=42,                # For reproducibility
+                oob_score=True,                 # Use out-of-bag samples for validation
+                warm_start=False,               # Build a new forest each time
+                max_leaf_nodes=None,            # No limit on leaf nodes
+                min_impurity_decrease=0.0,      # Standard impurity decrease
+                ccp_alpha=0.0                   # No complexity pruning
+            )
         elif model_type == 'gradient_boosting':
             model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
         elif model_type == 'linear_regression':

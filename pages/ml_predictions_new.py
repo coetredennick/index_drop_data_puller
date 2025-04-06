@@ -136,20 +136,16 @@ def show_ml_predictions():
     col1, col2 = st.columns(2)
     
     with col1:
-        # Model type selection with icons
-        model_icons = {
-            "random_forest": "🌲 Random Forest", 
-            "gradient_boosting": "🚀 Gradient Boosting", 
-            "linear_regression": "📈 Linear Regression"
-        }
+        # Only use Random Forest model - the best model type for this application
+        st.markdown("""
+        <div style="padding: 10px; background-color: #f0f8ff; border-radius: 5px; border-left: 4px solid #4682B4;">
+            <p style="margin: 0; font-weight: 600; color: #104E8B;">🌲 Using Optimized Random Forest Model</p>
+            <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #666;">Advanced ensemble learning algorithm specifically tuned for market pattern recognition</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        model_type = st.selectbox(
-            "Model Type",
-            options=list(model_icons.keys()),
-            format_func=lambda x: model_icons[x],
-            index=0,
-            key="model_type"
-        )
+        # Always use random forest
+        model_type = "random_forest"
     
     with col2:
         # Target period for predictions
