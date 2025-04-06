@@ -103,10 +103,15 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
         if len(window) < num_days:
             continue
         
-        # Calculate overall price drop from open of first day to close of last day
+        # Calculate both methods of drop:
+        # 1. Open-to-close: From open of first day to close of last day
         start_price = window.iloc[0]['Open']
         end_price = window.iloc[-1]['Close']
         price_change_pct = (end_price / start_price - 1) * 100
+        
+        # 2. Cumulative: Sum of the daily percentage returns
+        # This better represents the actual drop experienced by the market
+        cumulative_return_pct = window['Return'].sum()
         
         # NEW LOGIC: For a window to be a valid consecutive drop:
         # 1. EVERY day must have a drop at least as large as the threshold
@@ -128,11 +133,12 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
                 'type': 'consecutive',
                 'num_days': num_days,
                 'daily_drops': window['Return'].tolist(),
-                'cumulative_drop': price_change_pct,
+                'cumulative_drop': cumulative_return_pct,  # Using sum of daily returns
+                'price_change_pct': price_change_pct,  # Keep the open-to-close change for reference
                 'close': window.iloc[-1]['Close'],
                 'open': window.iloc[0]['Open'],
                 'volume': window['Volume'].sum(),
-                'severity': get_drop_severity(abs(price_change_pct))
+                'severity': get_drop_severity(abs(cumulative_return_pct))  # Use cumulative return for severity
             }
             
             # Add forward returns from the last day of the drop

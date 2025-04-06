@@ -323,10 +323,23 @@ def show_historical_performance():
             # For single day events, just use the date
             date_str = event['date'].strftime('%Y-%m-%d')
             
+        # For consecutive drops, format the drop percentage as the sum of the daily drops
+        if event['type'] == 'consecutive':
+            # Display the detailed daily drops
+            daily_drops = event.get('daily_drops', [])
+            if daily_drops:
+                daily_drop_str = f"{event['cumulative_drop']:.2f}% ({', '.join([f'{d:.2f}%' for d in daily_drops])})"
+            else:
+                daily_drop_str = f"{event['cumulative_drop']:.2f}%"
+        else:
+            # For single day events, just show the drop percentage
+            daily_drop_str = f"{event['drop_pct']:.2f}%"
+            
         row = {
             'Date': date_str,
             'Type': 'Single Day' if event['type'] == 'single_day' else f'Consecutive ({event["num_days"]} days)',
             'Drop (%)': event['drop_pct'] if event['type'] == 'single_day' else event['cumulative_drop'],
+            'Daily Drops': daily_drop_str,
             'Severity': event['severity'],
             '1W (%)': event.get('fwd_return_1w', None),
             '1M (%)': event.get('fwd_return_1m', None),
@@ -354,6 +367,9 @@ def show_historical_performance():
             'Drop (%)': events_df['Drop (%)'].mean(),
             'Severity': 'All Types',
         }
+        
+        # Add the Daily Drops column for the TOTALS row (leaving it empty since it can't be meaningfully aggregated)
+        totals_row['Daily Drops'] = 'N/A'
         
         # Add totals for each return period
         for col in ['1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)', 'Total Avg (%)']:
@@ -408,12 +424,12 @@ def show_historical_performance():
     
     # Format all columns directly without using format_dict
     for col in formatted_df.columns:
-        if '%' in col:  # Format percentage columns
+        if '%' in col and col != 'Daily Drops':  # Format percentage columns, except for the detailed daily drops
             # Format as percentage with one decimal place
             formatted_df[col] = formatted_df[col].apply(
                 lambda x: f"{x:.1f}%" if pd.notna(x) and isinstance(x, (int, float)) else x
             )
-        elif col == 'Date' or col == 'Type' or col == 'Severity':
+        elif col == 'Date' or col == 'Type' or col == 'Severity' or col == 'Daily Drops':
             # Keep these columns as is (string columns)
             continue
         else:
