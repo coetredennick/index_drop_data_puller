@@ -279,8 +279,25 @@ def show_drop_events():
                     'Volume vs Avg': period_data['Volume'] / period_data['Avg_Vol_50'] if 'Avg_Vol_50' in period_data.columns else None
                 })
                 
-                # Format the DataFrame
-                price_data['Date'] = price_data['Date'].dt.strftime('%Y-%m-%d')
+                # Add a total row at the bottom
+                total_row = pd.DataFrame({
+                    'Date': ['Total'],
+                    'Open': [period_data['Open'].iloc[0]],
+                    'High': [period_data['High'].max()],
+                    'Low': [period_data['Low'].min()],
+                    'Close': [period_data['Close'].iloc[-1]],
+                    'Daily Change (%)': [((period_data['Close'].iloc[-1] / period_data['Open'].iloc[0]) - 1) * 100],
+                    'Volume': [period_data['Volume'].sum()],
+                    'Volume vs Avg': [period_data['Volume'].sum() / (period_data['Avg_Vol_50'].mean() * len(period_data)) if 'Avg_Vol_50' in period_data.columns else None]
+                })
+                
+                # Append the total row
+                price_data = pd.concat([price_data, total_row], ignore_index=True)
+                
+                # Format the Date column - handle both datetime and string types
+                for i in range(len(price_data)):
+                    if isinstance(price_data.loc[i, 'Date'], pd.Timestamp):
+                        price_data.loc[i, 'Date'] = price_data.loc[i, 'Date'].strftime('%Y-%m-%d')
                 
                 # Function to apply color formatting
                 def color_negative_red(val, props=''):
@@ -312,6 +329,16 @@ def show_drop_events():
                         ('text-align', 'center')  # Center-align headers
                     ]},
                     
+                    # Make the "Daily Change (%)" column more distinct (total column)
+                    {'selector': 'td:nth-child(6), th:nth-child(6)', 'props': [
+                        ('border-left', '2px solid #333'),
+                        ('border-right', '2px solid #333'),
+                        ('background-color', '#f0f4f8'),  # Light blue-gray background
+                        ('font-weight', '900'),          # Extra bold text
+                        ('color', '#0056b3'),            # Blue text
+                        ('text-shadow', '0 0 0.2px #0056b3')  # Text shadow for emphasis
+                    ]},
+                    
                     # Make the last row (totals) more distinct
                     {'selector': 'tr:last-child td', 'props': [
                         ('border-top', '2px solid #333'),
@@ -321,6 +348,15 @@ def show_drop_events():
                         ('font-size', '11px'),            # Slightly larger font
                         ('color', '#0056b3'),             # Blue text
                         ('text-shadow', '0 0 0.2px #0056b3')  # Text shadow for emphasis
+                    ]},
+                    
+                    # Make the intersection of totals row and column even more emphasized
+                    {'selector': 'tr:last-child td:nth-child(6)', 'props': [
+                        ('background-color', '#e6f0ff'),  # Slightly different background
+                        ('font-weight', '900'),           # Extra bold text
+                        ('font-size', '11px'),            # Slightly larger font
+                        ('color', '#004494'),             # Darker blue for the intersection
+                        ('text-shadow', '0 0 0.5px #004494')  # Stronger text shadow
                     ]}
                 ])
                 
