@@ -273,10 +273,14 @@ def show_historical_performance():
     # Apply styling with formatting and smaller text using map (replaces deprecated applymap)
     styled_events_df = events_df.style.map(color_cell).format(format_dict)
     
-    # Add custom CSS for smaller font and more compact layout
+    # Add custom CSS for smaller font and compact layout with border before total column
     styled_events_df = styled_events_df.set_table_styles([
         {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]},
-        {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]}
+        {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '2px 5px'), ('white-space', 'nowrap')]},
+        # Add left border to the Total Avg column
+        {'selector': 'td:nth-child(10), th:nth-child(10)', 'props': [('border-left', '2px solid #333')]},
+        # Add top border to the last row (totals)
+        {'selector': 'tr:last-child td', 'props': [('border-top', '2px solid #333')]}
     ])
     
     # Display the table
