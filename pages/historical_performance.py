@@ -352,9 +352,24 @@ def show_historical_performance():
     
     # First format the data values with our formatter
     formatted_df = events_df.copy()
-    for col, fmt in format_dict.items():
-        if col in formatted_df.columns:
-            formatted_df[col] = formatted_df[col].map(lambda x: f"{x:{fmt}}" if pd.notna(x) else "")
+    # Manually format the values instead of using format string
+    for col in formatted_df.columns:
+        if col in format_dict:
+            if '%' in str(format_dict[col]):
+                # Format as percentage
+                formatted_df[col] = formatted_df[col].apply(
+                    lambda x: f"{x:.1f}%" if pd.notna(x) and isinstance(x, (int, float)) else x
+                )
+            elif ',' in str(format_dict[col]):
+                # Format with comma separator
+                formatted_df[col] = formatted_df[col].apply(
+                    lambda x: f"{x:,.0f}" if pd.notna(x) and isinstance(x, (int, float)) else x
+                )
+            elif '.' in str(format_dict[col]):
+                # Format with decimal places
+                formatted_df[col] = formatted_df[col].apply(
+                    lambda x: f"{x:.2f}" if pd.notna(x) and isinstance(x, (int, float)) else x
+                )
     
     # Apply color formatting
     html_content = "<div style='overflow-x: auto;'>"
