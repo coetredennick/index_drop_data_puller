@@ -123,93 +123,33 @@ def show_historical_performance():
     fig_price = create_price_chart(st.session_state.data, all_events)
     st.plotly_chart(fig_price, use_container_width=True)
     
-    # Calculate aggregate returns after drops
-    st.markdown("### Aggregate Return Analysis After Market Drops")
-    
-    # Create a DataFrame for aggregate returns
+    # Calculate aggregate returns after drops for use in detailed DB
     time_periods = ['1W', '1M', '3M', '6M', '1Y', '3Y']
     
-    # Initialize dict to store results with shorter column names
-    agg_returns = {
-        'Period': time_periods,
-        'Avg (%)': [],
-        'Med (%)': [],
-        'Min (%)': [],
-        'Max (%)': [],
-        'Pos (%)': []
-    }
+    # Calculate metrics for later use
+    # Create a DataFrame for calculating aggregate metrics
+    agg_metrics = {}
+    severity_metrics = {}
     
+    # Compute overall aggregates
     for period in time_periods:
         period_key = f'fwd_return_{period.lower()}'
         period_returns = [event[period_key] for event in all_events if period_key in event and not pd.isna(event[period_key])]
         
         if period_returns:
-            agg_returns['Avg (%)'].append(np.mean(period_returns))
-            agg_returns['Med (%)'].append(np.median(period_returns))
-            agg_returns['Min (%)'].append(min(period_returns))
-            agg_returns['Max (%)'].append(max(period_returns))
-            positive_pct = sum(1 for r in period_returns if r > 0) / len(period_returns) * 100
-            agg_returns['Pos (%)'].append(positive_pct)
+            agg_metrics[period] = {
+                'avg': np.mean(period_returns),
+                'med': np.median(period_returns),
+                'min': min(period_returns),
+                'max': max(period_returns),
+                'pos_pct': sum(1 for r in period_returns if r > 0) / len(period_returns) * 100
+            }
         else:
-            agg_returns['Avg (%)'].append(None)
-            agg_returns['Med (%)'].append(None)
-            agg_returns['Min (%)'].append(None)
-            agg_returns['Max (%)'].append(None)
-            agg_returns['Pos (%)'].append(None)
+            agg_metrics[period] = {
+                'avg': None, 'med': None, 'min': None, 'max': None, 'pos_pct': None
+            }
     
-    # Create DataFrame and display
-    agg_returns_df = pd.DataFrame(agg_returns)
-    
-    # Convert to a more readable format with time periods as index
-    agg_returns_df = agg_returns_df.set_index('Period')
-    
-    # Function to apply color formatting based on value only
-    def color_scale(val):
-        if pd.isna(val):
-            return ''
-        
-        # For percentage columns
-        if isinstance(val, (int, float)):
-            if val > 0:
-                # Green for positive returns
-                color_val = min(1.0, max(0.0, val / 20))
-                return f'background-color: rgba(0, 128, 0, {color_val:.2f})'
-            else:
-                # Red for negative returns
-                color_val = min(1.0, max(0.0, abs(val) / 20))
-                return f'background-color: rgba(255, 0, 0, {color_val:.2f})'
-        return ''
-    
-    # Apply styling to the DataFrame with smaller font and 1 decimal place with % sign
-    format_dict = {col: '{:.1f}%' for col in agg_returns_df.columns}
-    styled_df = agg_returns_df.style.format(format_dict)
-    
-    # Add custom CSS for smaller font and compact layout
-    styled_df = styled_df.set_table_styles([
-        {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '3px 5px'), ('white-space', 'nowrap')]},
-        {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '3px 5px'), ('white-space', 'nowrap')]}
-    ])
-    
-    # Apply color formatting to each column
-    for col in agg_returns_df.columns:
-        if "Pos" in col:  # Matches "Pos (%)" column
-            # Special coloring for positive outcomes column
-            # Use map instead of deprecated applymap
-            styled_df = styled_df.map(
-                lambda x: f'background-color: rgba(0, 128, 0, {min(1.0, max(0.0, x / 100)):.2f})' if not pd.isna(x) else '',
-                subset=pd.IndexSlice[:, col]
-            )
-        else:
-            # Regular coloring for other columns
-            styled_df = styled_df.map(color_scale, subset=pd.IndexSlice[:, col])
-    
-    # Display the table
-    st.table(styled_df)
-    
-    # Calculate average returns by severity
-    st.markdown("### Returns by Drop Severity")
-    
-    # Group events by severity
+    # Compute by severity
     severity_groups = {}
     for event in all_events:
         severity = event['severity']
@@ -217,24 +157,11 @@ def show_historical_performance():
             severity_groups[severity] = []
         severity_groups[severity].append(event)
     
-    # Initialize dict to store results
-    severity_returns = {
-        'Severity': [],
-        'Count': []
-    }
-    
-    # Add columns for each time period with shorter names for better fit
-    for period in time_periods:
-        severity_returns[f'{period} Ret (%)'] = []  # Short for "Average Return"
-        severity_returns[f'{period} Pos (%)'] = []  # Short for "Positive Outcomes"
-    
-    # Calculate metrics for each severity group
     severity_order = ['Severe', 'Major', 'Significant', 'Minor']
     for severity in severity_order:
         if severity in severity_groups:
             events = severity_groups[severity]
-            severity_returns['Severity'].append(severity)
-            severity_returns['Count'].append(len(events))
+            severity_metrics[severity] = {'count': len(events)}
             
             for period in time_periods:
                 period_key = f'fwd_return_{period.lower()}'
@@ -243,76 +170,117 @@ def show_historical_performance():
                 if period_returns:
                     avg_return = np.mean(period_returns)
                     positive_pct = sum(1 for r in period_returns if r > 0) / len(period_returns) * 100
-                    
-                    severity_returns[f'{period} Ret (%)'].append(avg_return)
-                    severity_returns[f'{period} Pos (%)'].append(positive_pct)
+                    severity_metrics[severity][f'{period}_avg'] = avg_return
+                    severity_metrics[severity][f'{period}_pos'] = positive_pct
                 else:
-                    severity_returns[f'{period} Ret (%)'].append(None)
-                    severity_returns[f'{period} Pos (%)'].append(None)
+                    severity_metrics[severity][f'{period}_avg'] = None
+                    severity_metrics[severity][f'{period}_pos'] = None
     
-    # Create DataFrame and display
-    severity_returns_df = pd.DataFrame(severity_returns)
+    # Detailed Return Database (now combined with aggregates)
+    st.markdown("### Market Drop Return Database with Aggregates")
     
-    # Convert to a more readable format with severity as index
-    severity_returns_df = severity_returns_df.set_index('Severity')
+    # First, create aggregate entries to add to the table
+    aggregate_rows = []
     
-    # Apply styling to the DataFrame
-    def color_return_scale(val):
-        if pd.isna(val):
-            return ''
-        
-        # For return percentage columns
-        if isinstance(val, (int, float)):
-            if val > 0:
-                # Green for positive returns
-                color_val = min(1.0, max(0.0, val / 20))
-                return f'background-color: rgba(0, 128, 0, {color_val:.2f})'
-            else:
-                # Red for negative returns
-                color_val = min(1.0, max(0.0, abs(val) / 20))
-                return f'background-color: rgba(255, 0, 0, {color_val:.2f})'
-        return ''
+    # Add overall aggregate statistics
+    aggregate_rows.append({
+        'Date': 'ALL EVENTS',
+        'Type': f'Total: {len(all_events)}',
+        'Drop (%)': '-',
+        'Severity': 'AVERAGE',
+        '1W (%)': agg_metrics['1W']['avg'] if '1W' in agg_metrics else None,
+        '1M (%)': agg_metrics['1M']['avg'] if '1M' in agg_metrics else None,
+        '3M (%)': agg_metrics['3M']['avg'] if '3M' in agg_metrics else None,
+        '6M (%)': agg_metrics['6M']['avg'] if '6M' in agg_metrics else None,
+        '1Y (%)': agg_metrics['1Y']['avg'] if '1Y' in agg_metrics else None,
+        '3Y (%)': agg_metrics['3Y']['avg'] if '3Y' in agg_metrics else None
+    })
     
-    # Apply styling to the DataFrame with smaller font and 1 decimal place
-    format_dict = {'Count': '{:.0f}'}  # No decimal for Count
+    aggregate_rows.append({
+        'Date': 'ALL EVENTS',
+        'Type': f'Total: {len(all_events)}',
+        'Drop (%)': '-',
+        'Severity': 'MEDIAN',
+        '1W (%)': agg_metrics['1W']['med'] if '1W' in agg_metrics else None,
+        '1M (%)': agg_metrics['1M']['med'] if '1M' in agg_metrics else None,
+        '3M (%)': agg_metrics['3M']['med'] if '3M' in agg_metrics else None,
+        '6M (%)': agg_metrics['6M']['med'] if '6M' in agg_metrics else None,
+        '1Y (%)': agg_metrics['1Y']['med'] if '1Y' in agg_metrics else None,
+        '3Y (%)': agg_metrics['3Y']['med'] if '3Y' in agg_metrics else None
+    })
     
-    # Add % sign to percentage columns
-    for col in severity_returns_df.columns:
-        if col != 'Count':
-            format_dict[col] = '{:.1f}%'
+    aggregate_rows.append({
+        'Date': 'ALL EVENTS',
+        'Type': f'Total: {len(all_events)}',
+        'Drop (%)': '-',
+        'Severity': 'MIN',
+        '1W (%)': agg_metrics['1W']['min'] if '1W' in agg_metrics else None,
+        '1M (%)': agg_metrics['1M']['min'] if '1M' in agg_metrics else None,
+        '3M (%)': agg_metrics['3M']['min'] if '3M' in agg_metrics else None,
+        '6M (%)': agg_metrics['6M']['min'] if '6M' in agg_metrics else None,
+        '1Y (%)': agg_metrics['1Y']['min'] if '1Y' in agg_metrics else None,
+        '3Y (%)': agg_metrics['3Y']['min'] if '3Y' in agg_metrics else None
+    })
     
-    styled_severity_df = severity_returns_df.style.format(format_dict)
+    aggregate_rows.append({
+        'Date': 'ALL EVENTS',
+        'Type': f'Total: {len(all_events)}',
+        'Drop (%)': '-',
+        'Severity': 'MAX',
+        '1W (%)': agg_metrics['1W']['max'] if '1W' in agg_metrics else None,
+        '1M (%)': agg_metrics['1M']['max'] if '1M' in agg_metrics else None,
+        '3M (%)': agg_metrics['3M']['max'] if '3M' in agg_metrics else None,
+        '6M (%)': agg_metrics['6M']['max'] if '6M' in agg_metrics else None,
+        '1Y (%)': agg_metrics['1Y']['max'] if '1Y' in agg_metrics else None,
+        '3Y (%)': agg_metrics['3Y']['max'] if '3Y' in agg_metrics else None
+    })
     
-    # Add custom CSS for smaller font and compact layout
-    styled_severity_df = styled_severity_df.set_table_styles([
-        {'selector': 'td', 'props': [('font-size', '10px'), ('padding', '3px 5px'), ('white-space', 'nowrap')]},
-        {'selector': 'th', 'props': [('font-size', '10px'), ('padding', '3px 5px'), ('white-space', 'nowrap')]}
-    ])
+    aggregate_rows.append({
+        'Date': 'ALL EVENTS',
+        'Type': f'Total: {len(all_events)}',
+        'Drop (%)': '-',
+        'Severity': 'POSITIVE %',
+        '1W (%)': agg_metrics['1W']['pos_pct'] if '1W' in agg_metrics else None,
+        '1M (%)': agg_metrics['1M']['pos_pct'] if '1M' in agg_metrics else None,
+        '3M (%)': agg_metrics['3M']['pos_pct'] if '3M' in agg_metrics else None,
+        '6M (%)': agg_metrics['6M']['pos_pct'] if '6M' in agg_metrics else None,
+        '1Y (%)': agg_metrics['1Y']['pos_pct'] if '1Y' in agg_metrics else None,
+        '3Y (%)': agg_metrics['3Y']['pos_pct'] if '3Y' in agg_metrics else None
+    })
     
-    # Apply color formatting to each column
-    for col in severity_returns_df.columns:
-        if col == 'Count':
-            # No coloring for Count column
-            continue
-        elif 'Pos' in col:  # Matches "Pos (%)" columns
-            # Special coloring for positive percentage columns
-            # Use map instead of deprecated applymap
-            styled_severity_df = styled_severity_df.map(
-                lambda x: f'background-color: rgba(0, 128, 0, {min(1.0, max(0.0, x / 100)):.2f})' if not pd.isna(x) else '',
-                subset=pd.IndexSlice[:, col]
-            )
-        else:
-            # Regular coloring for return columns
-            styled_severity_df = styled_severity_df.map(color_return_scale, subset=pd.IndexSlice[:, col])
+    # Add severity-based aggregate statistics
+    for severity in severity_order:
+        if severity in severity_metrics:
+            metrics = severity_metrics[severity]
+            aggregate_rows.append({
+                'Date': f'{severity.upper()}',
+                'Type': f'Total: {metrics["count"]}',
+                'Drop (%)': '-',
+                'Severity': severity,
+                '1W (%)': metrics.get('1W_avg'),
+                '1M (%)': metrics.get('1M_avg'),
+                '3M (%)': metrics.get('3M_avg'),
+                '6M (%)': metrics.get('6M_avg'),
+                '1Y (%)': metrics.get('1Y_avg'),
+                '3Y (%)': metrics.get('3Y_avg')
+            })
     
-    # Display the table
-    st.table(styled_severity_df)
+    # Add a separator row
+    aggregate_rows.append({
+        'Date': '----------',
+        'Type': '----------',
+        'Drop (%)': '----------',
+        'Severity': '----------',
+        '1W (%)': None,
+        '1M (%)': None,
+        '3M (%)': None,
+        '6M (%)': None,
+        '1Y (%)': None,
+        '3Y (%)': None
+    })
     
-    # Detailed Return Database
-    st.markdown("### Detailed Return Database")
-    
-    # Prepare data for the heatmap
-    events_df = pd.DataFrame([
+    # Prepare data for individual events
+    event_rows = [
         {
             'Date': event['date'].strftime('%Y-%m-%d'),
             'Type': 'Single Day' if event['type'] == 'single_day' else f'Consecutive ({event["num_days"]} days)',
@@ -326,10 +294,21 @@ def show_historical_performance():
             '3Y (%)': event.get('fwd_return_3y', None)
         }
         for event in all_events
-    ])
+    ]
     
-    # Sort by date (newest first)
-    events_df = events_df.sort_values('Date', ascending=False)
+    # Combine aggregate and event data
+    combined_rows = aggregate_rows + event_rows
+    events_df = pd.DataFrame(combined_rows)
+    
+    # Sort events by date (newest first) but keep aggregates at the top
+    if not events_df.empty:
+        # Create a helper column for sorting
+        events_df['sort_key'] = events_df.apply(
+            lambda x: '0' if x['Date'] in ['ALL EVENTS', '----------'] or x['Date'].startswith(('SEVERE', 'MAJOR', 'SIGNIFICANT', 'MINOR')) 
+            else '1' + x['Date'], axis=1
+        )
+        events_df = events_df.sort_values('sort_key')
+        events_df = events_df.drop('sort_key', axis=1)
     
     # Function to apply color formatting for the detailed database
     def color_cell(val):
@@ -355,6 +334,24 @@ def show_historical_performance():
             return 'background-color: rgba(255, 0, 0, 0.3)'
         elif val == 'Minor':
             return 'background-color: rgba(255, 0, 0, 0.1)'
+        elif val == 'AVERAGE':
+            return 'background-color: rgba(0, 0, 128, 0.7); color: white; font-weight: bold'
+        elif val == 'MEDIAN':
+            return 'background-color: rgba(0, 0, 128, 0.5); color: white; font-weight: bold'
+        elif val == 'MIN':
+            return 'background-color: rgba(0, 0, 128, 0.3); color: white; font-weight: bold'
+        elif val == 'MAX':
+            return 'background-color: rgba(0, 0, 128, 0.3); color: white; font-weight: bold'
+        elif val == 'POSITIVE %':
+            return 'background-color: rgba(0, 128, 0, 0.7); color: white; font-weight: bold'
+        
+        # For aggregate header rows
+        if val == 'ALL EVENTS' or val.startswith(('SEVERE', 'MAJOR', 'SIGNIFICANT', 'MINOR')):
+            return 'background-color: #333333; color: white; font-weight: bold'
+        
+        # For separator row
+        if val == '----------':
+            return 'background-color: #cccccc'
             
         return ''
     
