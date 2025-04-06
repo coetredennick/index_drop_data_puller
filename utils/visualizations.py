@@ -114,6 +114,7 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
             event_sizes = [abs(e['drop_pct'])*2 for e in single_day_events]  # Size based on drop magnitude
             event_colors = ['rgba(255, 0, 0, 0.8)' for _ in single_day_events]
             
+            # Add markers to price chart
             fig.add_trace(
                 go.Scatter(
                     x=event_dates,
@@ -131,6 +132,78 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
                 ),
                 row=1, col=1, secondary_y=False,
             )
+            
+            # Also add markers to the VIX panel
+            if 'ATR_Pct' in data.columns:
+                vix_values = [data.loc[date, 'ATR_Pct'] if date in data.index and not pd.isna(data.loc[date, 'ATR_Pct']) else None for date in event_dates]
+                
+                # Filter out None values
+                valid_dates = []
+                valid_values = []
+                valid_sizes = []
+                valid_texts = []
+                
+                for i, (date, value, size, event) in enumerate(zip(event_dates, vix_values, event_sizes, single_day_events)):
+                    if value is not None:
+                        valid_dates.append(date)
+                        valid_values.append(value)
+                        valid_sizes.append(size)
+                        valid_texts.append(f"{event['date'].strftime('%Y-%m-%d')}: {event['drop_pct']:.2f}%")
+                
+                if valid_dates:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=valid_dates,
+                            y=valid_values,
+                            mode='markers',
+                            marker=dict(
+                                size=[s*0.8 for s in valid_sizes],  # Slightly smaller
+                                color='rgba(255, 0, 0, 0.8)',
+                                symbol='triangle-down'
+                            ),
+                            name="",
+                            text=valid_texts,
+                            hoverinfo="text",
+                            showlegend=False,
+                        ),
+                        row=2, col=1,
+                    )
+            
+            # Also add markers to the RSI panel
+            if 'RSI_14' in data.columns:
+                rsi_values = [data.loc[date, 'RSI_14'] if date in data.index and not pd.isna(data.loc[date, 'RSI_14']) else None for date in event_dates]
+                
+                # Filter out None values
+                valid_dates = []
+                valid_values = []
+                valid_sizes = []
+                valid_texts = []
+                
+                for i, (date, value, size, event) in enumerate(zip(event_dates, rsi_values, event_sizes, single_day_events)):
+                    if value is not None:
+                        valid_dates.append(date)
+                        valid_values.append(value)
+                        valid_sizes.append(size)
+                        valid_texts.append(f"{event['date'].strftime('%Y-%m-%d')}: {event['drop_pct']:.2f}%")
+                
+                if valid_dates:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=valid_dates,
+                            y=valid_values,
+                            mode='markers',
+                            marker=dict(
+                                size=[s*0.8 for s in valid_sizes],  # Slightly smaller
+                                color='rgba(255, 0, 0, 0.8)',
+                                symbol='triangle-down'
+                            ),
+                            name="",
+                            text=valid_texts,
+                            hoverinfo="text",
+                            showlegend=False,
+                        ),
+                        row=3, col=1,
+                    )
         
         # Extract consecutive drop events
         consecutive_events = [e for e in drop_events if e['type'] == 'consecutive']
@@ -146,6 +219,7 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
                     y_min = period_data['Low'].min() * 0.98
                     y_max = period_data['High'].max() * 1.02
                     
+                    # Highlight on the price chart
                     fig.add_shape(
                         type="rect",
                         x0=start_date,
@@ -161,6 +235,50 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
                         layer="below",
                         row=1, col=1
                     )
+                    
+                    # Highlight the same period on VIX panel
+                    if 'ATR_Pct' in data.columns:
+                        vix_period_data = data.loc[start_date:end_date]
+                        vix_min = vix_period_data['ATR_Pct'].min() * 0.9 if not pd.isna(vix_period_data['ATR_Pct'].min()) else 0
+                        vix_max = vix_period_data['ATR_Pct'].max() * 1.1 if not pd.isna(vix_period_data['ATR_Pct'].max()) else 0
+                        
+                        fig.add_shape(
+                            type="rect",
+                            x0=start_date,
+                            x1=end_date,
+                            y0=vix_min,
+                            y1=vix_max,
+                            line=dict(
+                                color="rgba(255, 0, 0, 0.3)",
+                                width=1,
+                            ),
+                            fillcolor="rgba(255, 0, 0, 0.1)",
+                            opacity=0.5,
+                            layer="below",
+                            row=2, col=1
+                        )
+                    
+                    # Highlight the same period on RSI panel
+                    if 'RSI_14' in data.columns:
+                        rsi_period_data = data.loc[start_date:end_date]
+                        rsi_min = rsi_period_data['RSI_14'].min() * 0.9 if not pd.isna(rsi_period_data['RSI_14'].min()) else 0
+                        rsi_max = rsi_period_data['RSI_14'].max() * 1.1 if not pd.isna(rsi_period_data['RSI_14'].max()) else 100
+                        
+                        fig.add_shape(
+                            type="rect",
+                            x0=start_date,
+                            x1=end_date,
+                            y0=rsi_min,
+                            y1=rsi_max,
+                            line=dict(
+                                color="rgba(255, 0, 0, 0.3)",
+                                width=1,
+                            ),
+                            fillcolor="rgba(255, 0, 0, 0.1)",
+                            opacity=0.5,
+                            layer="below",
+                            row=3, col=1
+                        )
     
     # Update layout
     fig.update_layout(
