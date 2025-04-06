@@ -12,7 +12,7 @@ from utils.data_fetcher import fetch_sp500_data, cache_data
 from utils.technical_indicators import calculate_technical_indicators
 from utils.event_detection import detect_drop_events, detect_consecutive_drops
 from pages.historical_performance import show_historical_performance
-from pages.ml_predictions import show_ml_predictions
+from pages.ml_predictions_new import show_ml_predictions
 
 # Configure the page
 st.set_page_config(

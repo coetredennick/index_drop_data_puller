@@ -21,8 +21,9 @@ from utils.ml_models import (
 
 def show_ml_predictions():
     """
-    Display the Machine Learning Predictions tab with model training,
-    performance analysis, and predictions for current market conditions
+    Display the Machine Learning Predictions tab focused on ML forecasting 
+    with confidence intervals for different time periods (1W, 1M, 3M, 1Y)
+    Shows a forecasting graph with YTD data and up to 1 year projection
     """
     
     # Add custom styling for the ML Predictions page
