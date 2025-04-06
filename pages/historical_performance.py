@@ -73,13 +73,14 @@ def show_historical_performance():
     # Display overview metrics
     st.markdown("### S&P 500 Drop Events Analysis")
     
+    # Create cards that highlight key aggregate data 
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.metric(
             "Total Drop Events", 
             len(all_events),
-
+            delta=None
         )
     
     with col2:
@@ -99,7 +100,7 @@ def show_historical_performance():
         st.metric(
             "Severe Drops (>7%)", 
             f"{severity_counts['Severe']} ({severe_pct:.1f}%)",
-
+            delta=None
         )
     
     with col3:
@@ -107,7 +108,7 @@ def show_historical_performance():
         st.metric(
             "Major Drops (5-7%)", 
             f"{severity_counts['Major']} ({major_pct:.1f}%)",
-
+            delta=None
         )
     
     with col4:
@@ -115,8 +116,81 @@ def show_historical_performance():
         st.metric(
             "Significant Drops (3-5%)", 
             f"{severity_counts['Significant']} ({significant_pct:.1f}%)",
-
+            delta=None
         )
+        
+    # Add new row of metrics highlighting recovery stats
+    st.markdown("### Key Performance Metrics")
+    
+    metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
+    
+    # Calculate average return metrics for key timeframes
+    if all_events and len(all_events) > 0:
+        # Get average 1 month return
+        avg_1m = np.mean([event.get('fwd_return_1m', 0) for event in all_events 
+                          if 'fwd_return_1m' in event and not pd.isna(event['fwd_return_1m'])])
+        # Percentage of positive 1 month returns
+        positive_1m = sum(1 for event in all_events 
+                         if 'fwd_return_1m' in event and not pd.isna(event['fwd_return_1m']) and event['fwd_return_1m'] > 0)
+        positive_1m_pct = (positive_1m / len(all_events)) * 100 if len(all_events) > 0 else 0
+        
+        # Get average 1 year return
+        avg_1y = np.mean([event.get('fwd_return_1y', 0) for event in all_events 
+                          if 'fwd_return_1y' in event and not pd.isna(event['fwd_return_1y'])])
+        # Percentage of positive 1 year returns
+        positive_1y = sum(1 for event in all_events 
+                         if 'fwd_return_1y' in event and not pd.isna(event['fwd_return_1y']) and event['fwd_return_1y'] > 0)
+        positive_1y_pct = (positive_1y / len(all_events)) * 100 if len(all_events) > 0 else 0
+        
+        # Calculate average drop size
+        avg_drop = np.mean([abs(event['drop_pct']) if event['type'] == 'single_day' else abs(event['cumulative_drop']) 
+                           for event in all_events])
+    else:
+        avg_1m = 0
+        positive_1m_pct = 0
+        avg_1y = 0
+        positive_1y_pct = 0
+        avg_drop = 0
+    
+    with metrics_col1:
+        st.metric(
+            "Avg. Drop Size", 
+            f"{avg_drop:.1f}%",
+            delta=None,
+        )
+    
+    with metrics_col2:
+        st.metric(
+            "Avg. 1-Month Return", 
+            f"{avg_1m:.1f}%",
+            delta=f"{positive_1m_pct:.0f}% positive" if positive_1m_pct > 50 else f"only {positive_1m_pct:.0f}% positive",
+            delta_color="normal" if positive_1m_pct > 50 else "off"
+        )
+    
+    with metrics_col3:
+        st.metric(
+            "Avg. 1-Year Return", 
+            f"{avg_1y:.1f}%",
+            delta=f"{positive_1y_pct:.0f}% positive" if positive_1y_pct > 50 else f"only {positive_1y_pct:.0f}% positive",
+            delta_color="normal" if positive_1y_pct > 50 else "off"
+        )
+    
+    with metrics_col4:
+        # Calc best and worst month
+        if all_events and len(all_events) > 0:
+            month_returns = [event.get('fwd_return_1m', 0) for event in all_events 
+                           if 'fwd_return_1m' in event and not pd.isna(event['fwd_return_1m'])]
+            if month_returns:
+                best_month = max(month_returns)
+                worst_month = min(month_returns)
+                st.metric(
+                    "Best vs Worst 1M", 
+                    f"+{best_month:.1f}% / {worst_month:.1f}%",
+                    delta=f"Range: {best_month - worst_month:.1f}%",
+                    delta_color="off"
+                )
+            else:
+                st.metric("Best vs Worst 1M", "N/A", delta=None)
     
     # Show price chart with drop events marked
     st.markdown("### S&P 500 Price Chart with Drop Events")
