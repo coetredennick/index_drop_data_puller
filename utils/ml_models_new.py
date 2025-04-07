@@ -1135,8 +1135,17 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
         
         if len(recent_data) > 0 and features_available:
             # Get the ML model prediction 
-            pred_return = predict_returns(model_result, recent_data, features)
+            prediction_result = predict_returns(model_result, recent_data, features)
             
+            # Extract the predicted return from the result dictionary
+            if prediction_result and prediction_result.get('success', False):
+                pred_return = prediction_result.get('predicted_return')
+            else:
+                # Handle error in prediction
+                if prediction_result:
+                    print(f"Prediction error: {prediction_result.get('error', 'Unknown error')}")
+                pred_return = None
+                
             if pred_return is not None:
                 # Identify which target period the model was trained on (1W, 1M, 3M, etc.)
                 target_column = model_result.get('target_column', 'Fwd_Ret_1M')
