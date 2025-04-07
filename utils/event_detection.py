@@ -35,7 +35,10 @@ def detect_drop_events(data, threshold_pct):
             'drop_pct': row['Return'],
             'close': row['Close'],
             'volume': row['Volume'],
-            'severity': get_drop_severity(abs(row['Return']))
+            'severity': get_drop_severity(abs(row['Return'])),
+            # Add rate of decline metrics (for single day, it's the same as the drop percentage)
+            'decline_rate_per_day': abs(row['Return']),  # In % per day
+            'decline_duration': 1  # 1 day by definition
         }
         
         # Add forward returns
@@ -138,7 +141,12 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
                 'close': window.iloc[-1]['Close'],
                 'open': window.iloc[0]['Open'],
                 'volume': window['Volume'].sum(),
-                'severity': get_drop_severity(abs(cumulative_return_pct))  # Use cumulative return for severity
+                'severity': get_drop_severity(abs(cumulative_return_pct)),  # Use cumulative return for severity
+                # Add rate of decline metrics
+                'decline_duration': num_days,  # Number of trading days of the decline
+                'decline_rate_per_day': abs(cumulative_return_pct) / num_days,  # Average % decline per day
+                'max_daily_decline': abs(min(window['Return'])),  # Largest single-day drop during the event
+                'decline_acceleration': abs(window['Return'].iloc[-1]) - abs(window['Return'].iloc[0])  # Positive means accelerating drop
             }
             
             # Add forward returns from the last day of the drop
@@ -249,13 +257,18 @@ def get_event_label(event):
     date_str = event['date'].strftime('%Y-%m-%d')
     
     if event['type'] == 'single_day':
+        # Include rate of decline in single-day event
         return f"{date_str}: {event['severity']} Drop ({event['drop_pct']:.2f}%)"
     else:
         start_date = event['start_date'].strftime('%Y-%m-%d')
         # Show the threshold that each day had to meet
         actual_threshold = st.session_state.drop_threshold if 'drop_threshold' in st.session_state else None
+        
+        # Add rate of decline information
+        rate_info = f" | Rate: {event.get('decline_rate_per_day', 0):.2f}%/day"
+        
         if actual_threshold is not None:
-            return f"{start_date} to {date_str}: {event['severity']} Drop ({event['cumulative_drop']:.2f}% over {event['num_days']} days, EACH day ≥{actual_threshold:.1f}%)"
+            return f"{start_date} to {date_str}: {event['severity']} Drop ({event['cumulative_drop']:.2f}% over {event['num_days']} days{rate_info}, EACH day ≥{actual_threshold:.1f}%)"
         else:
             # Fallback if threshold isn't in session state
-            return f"{start_date} to {date_str}: {event['severity']} Drop ({event['cumulative_drop']:.2f}% over {event['num_days']} days)"
+            return f"{start_date} to {date_str}: {event['severity']} Drop ({event['cumulative_drop']:.2f}% over {event['num_days']} days{rate_info})"

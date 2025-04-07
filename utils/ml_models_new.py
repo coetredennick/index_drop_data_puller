@@ -103,6 +103,43 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         # Volume weighted average price (VWAP)-based feature
         df['VWAP_Ratio'] = df['Close'] / ((df['High'] + df['Low'] + df['Close']) / 3 * df['Volume']).cumsum() / df['Volume'].cumsum()
     
+    # Calculate rate of decline metrics for ML models
+    if 'Return' in df.columns:
+        # Initialize decline rate columns with NaN
+        df['Decline_Duration'] = 1  # Default is 1 day
+        df['Decline_Rate_Per_Day'] = df['Return'].abs()  # For single day, rate = magnitude of return
+        df['Max_Daily_Decline'] = df['Return'].abs()  # For single day, max = magnitude of return
+        df['Decline_Acceleration'] = 0  # For single day, acceleration is 0
+        
+        # Add rolling metrics that could identify consecutive declines
+        # Rolling sum of negative returns (across last 5 and 10 trading days)
+        df['Rolling_5d_Neg_Returns'] = df['Return'].rolling(5).apply(
+            lambda x: sum([r for r in x if r < 0])
+        )
+        df['Rolling_10d_Neg_Returns'] = df['Return'].rolling(10).apply(
+            lambda x: sum([r for r in x if r < 0])
+        )
+        
+        # Count of negative return days in rolling window
+        df['Rolling_5d_Neg_Days'] = df['Return'].rolling(5).apply(
+            lambda x: sum([1 for r in x if r < 0])
+        )
+        
+        # Calculate average rate of decline over recent periods
+        df['Avg_Decline_Rate_5d'] = df['Rolling_5d_Neg_Returns'] / df['Rolling_5d_Neg_Days'].replace(0, np.nan)
+        
+        # Volatility of declines
+        df['Decline_Volatility_5d'] = df['Return'].rolling(5).apply(
+            lambda x: np.std([r for r in x if r < 0]) if any(r < 0 for r in x) else np.nan
+        )
+        
+        # Calculate if we're in an accelerating decline pattern
+        # (where recent drops are getting bigger each day)
+        df['Accelerating_Decline'] = df['Return'].rolling(3).apply(
+            lambda x: 1 if len(x) == 3 and x[0] < 0 and x[1] < 0 and x[2] < 0 and 
+                         abs(x[0]) < abs(x[1]) < abs(x[2]) else 0
+        )
+    
     # Select features that might be useful for prediction
     feature_columns = [
         'Return',             # Today's return (%)
@@ -139,7 +176,19 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         'VIX_20D_Avg',        # 20-day VIX moving average
         'VIX_Rel_5D',         # VIX relative to 5-day average (%)
         'VIX_Rel_20D',        # VIX relative to 20-day average (%)
-        'VIX_HL_Range'        # VIX daily high-low range (%)
+        'VIX_HL_Range',       # VIX daily high-low range (%)
+        
+        # Rate of decline metrics (new)
+        'Decline_Rate_Per_Day',    # Current day's rate of decline
+        'Decline_Duration',        # Duration of current decline (1 for single day)
+        'Max_Daily_Decline',       # Maximum single-day decline in the period
+        'Decline_Acceleration',    # Measure if decline is accelerating/decelerating
+        'Rolling_5d_Neg_Returns',  # Sum of negative returns over 5 days
+        'Rolling_10d_Neg_Returns', # Sum of negative returns over 10 days
+        'Rolling_5d_Neg_Days',     # Number of negative days in last 5 days
+        'Avg_Decline_Rate_5d',     # Average rate of decline over 5 days
+        'Decline_Volatility_5d',   # Volatility of declines over 5 days
+        'Accelerating_Decline'     # Binary flag for accelerating decline pattern
     ]
     
     # Only include columns that actually exist in the data

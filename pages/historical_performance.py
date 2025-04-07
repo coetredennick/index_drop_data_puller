@@ -335,12 +335,29 @@ def show_historical_performance():
             # For single day events, just show the drop percentage
             daily_drop_str = f"{event['drop_pct']:.2f}%"
             
+        # Calculate rate of decline metrics
+        decline_rate = event.get('decline_rate_per_day', 0)
+        decline_duration = event.get('decline_duration', 1)  # 1-day minimum
+        
+        # For consecutive drops, add information about acceleration
+        if event['type'] == 'consecutive':
+            max_daily_decline = event.get('max_daily_decline', 0)
+            decline_acceleration = event.get('decline_acceleration', 0)
+            # Format acceleration with sign
+            acceleration_str = f"{decline_acceleration:+.2f}%" if abs(decline_acceleration) > 0.01 else "0.00%"
+            
+            decline_metrics = f"{decline_rate:.2f}%/day | Duration: {decline_duration}d | Max: {max_daily_decline:.2f}% | Accel: {acceleration_str}"
+        else:
+            # For single day drops, just show the rate (which is the same as the drop value)
+            decline_metrics = f"{decline_rate:.2f}%/day | Duration: 1d"
+            
         row = {
             'Date': date_str,
             'Type': 'Single Day' if event['type'] == 'single_day' else f'Consecutive ({event["num_days"]} days)',
             'Drop (%)': event['drop_pct'] if event['type'] == 'single_day' else event['cumulative_drop'],
             'Daily Drops': daily_drop_str,
             'Severity': event['severity'],
+            'Rate of Decline': decline_metrics,  # Add rate of decline metrics
             '1W (%)': event.get('fwd_return_1w', None),
             '1M (%)': event.get('fwd_return_1m', None),
             '3M (%)': event.get('fwd_return_3m', None),
@@ -370,6 +387,17 @@ def show_historical_performance():
         
         # Add the Daily Drops column for the TOTALS row (leaving it empty since it can't be meaningfully aggregated)
         totals_row['Daily Drops'] = 'N/A'
+        
+        # Add the Rate of Decline column for the TOTALS row
+        # Calculate average rate and duration across all events
+        avg_rate = events_df[events_df['Rate of Decline'].notna()]['Drop (%)'].abs().mean() / events_df[events_df['Rate of Decline'].notna()]['Type'].apply(
+            lambda x: int(x.split('(')[1].split(' ')[0]) if 'Consecutive' in x else 1
+        ).mean()
+        avg_duration = events_df[events_df['Rate of Decline'].notna()]['Type'].apply(
+            lambda x: int(x.split('(')[1].split(' ')[0]) if 'Consecutive' in x else 1
+        ).mean()
+        
+        totals_row['Rate of Decline'] = f"Avg: {avg_rate:.2f}%/day | Avg Duration: {avg_duration:.1f}d"
         
         # Add totals for each return period
         for col in ['1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)', 'Total Avg (%)']:
