@@ -84,8 +84,8 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         # Add volume rate of change
         df['Volume_ROC_5d'] = df['Volume'].pct_change(periods=5) * 100
         
-        # Add volume trend features (compare averages)
-        df['Vol_10_50_Ratio'] = df['Avg_Vol_10'] / df['Avg_Vol_50']
+        # Add volume trend features (compare averages) - use lowercase to match standardized names
+        df['Vol_10_50_Ratio'] = df['avg_vol_10'] / df['avg_vol_50']
         
         # Add price-volume correlation features
         df['Price_Volume_Correlation'] = df['Return'].rolling(10).corr(df['Volume'].pct_change())
