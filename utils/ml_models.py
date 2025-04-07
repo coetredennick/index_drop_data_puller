@@ -304,9 +304,24 @@ def train_model(data, features, target_column, model_type='random_forest', test_
     
     # Initialize the model
     if model_type == 'random_forest':
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model = RandomForestRegressor(
+            n_estimators=300,               # More trees for better stability and VIX feature integration
+            max_depth=12,                   # Slightly reduced depth to avoid overfitting with VIX features
+            min_samples_split=4,            # Require more samples to split nodes
+            min_samples_leaf=3,             # Ensure leaf nodes have sufficient samples
+            max_features='sqrt',            # Use sqrt(n_features) - standard approach for market prediction
+            bootstrap=True,                 # Use bootstrap samples
+            n_jobs=-1,                      # Use all available cores for training
+            criterion='squared_error',      # Mean squared error criterion
+            random_state=42,                # For reproducibility
+            oob_score=True,                 # Use out-of-bag samples for validation
+            warm_start=False,               # Build a new forest each time
+            max_leaf_nodes=None,            # No limit on leaf nodes
+            min_impurity_decrease=0.0001,   # Add minimal impurity decrease threshold for better stability
+            ccp_alpha=0.001                 # Add minimal complexity pruning for robustness
+        )
     elif model_type == 'gradient_boosting':
-        model = GradientBoostingRegressor(n_estimators=100, random_state=42)
+        model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
     elif model_type == 'linear_regression':
         model = LinearRegression()
     else:
