@@ -98,7 +98,8 @@ def fetch_sp500_data(start_date, end_date, include_vix=True):
                     # Fill any NaN values in VIX columns with forward filling, then backward filling
                     vix_cols = [col for col in sp500.columns if col.startswith('VIX_')]
                     if vix_cols:
-                        sp500[vix_cols] = sp500[vix_cols].fillna(method='ffill').fillna(method='bfill')
+                        # Use ffill() and bfill() methods instead of fillna(method=) to avoid deprecation warning
+                        sp500[vix_cols] = sp500[vix_cols].ffill().bfill()
                 
             except Exception as e:
                 # Log the error but continue without VIX data

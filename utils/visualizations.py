@@ -465,15 +465,20 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
         end_date = event_date + pd.Timedelta(days=365)
         
         # Ensure we don't try to get data from the future
-        if end_date > pd.Timestamp(datetime.now()):
-            end_date = pd.Timestamp(datetime.now())
+        now_ts = pd.Timestamp(datetime.now())
+        if end_date > now_ts:
+            end_date = now_ts
         
         # Ensure the data index is using pandas Timestamps for consistent comparison
         data_copy = data.copy()
         data_copy.index = pd.DatetimeIndex([pd.Timestamp(idx) if not isinstance(idx, pd.Timestamp) else idx for idx in data.index])
         
-        # Filter data for the selected period
-        mask = (data_copy.index >= start_date) & (data_copy.index <= end_date)
+        # Ensure start_date and end_date are pandas Timestamps for comparison
+        start_ts = pd.Timestamp(start_date)
+        end_ts = pd.Timestamp(end_date)
+        
+        # Filter data for the selected period using consistent timestamp format
+        mask = (data_copy.index >= start_ts) & (data_copy.index <= end_ts)
         period_data = data_copy.loc[mask].copy()
     except Exception as e:
         # Handle any errors in date processing
@@ -768,8 +773,12 @@ def create_technical_indicator_chart(data, event, indicator, title=None, height=
         data_copy = data.copy()
         data_copy.index = pd.DatetimeIndex([pd.Timestamp(idx) if not isinstance(idx, pd.Timestamp) else idx for idx in data.index])
         
+        # Ensure start_date and end_date are pandas Timestamps for comparison
+        start_ts = pd.Timestamp(start_date) if not isinstance(start_date, pd.Timestamp) else start_date
+        end_ts = pd.Timestamp(end_date) if not isinstance(end_date, pd.Timestamp) else end_date
+        
         # Filter data for the selected period
-        mask = (data_copy.index >= start_date) & (data_copy.index <= end_date)
+        mask = (data_copy.index >= start_ts) & (data_copy.index <= end_ts)
         period_data = data_copy.loc[mask].copy()
     except Exception as e:
         # Handle any errors in date processing

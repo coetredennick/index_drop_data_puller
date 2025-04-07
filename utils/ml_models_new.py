@@ -160,13 +160,13 @@ def train_model(data, features, target_column, model_type='random_forest', test_
         
         # Initialize the right model type
         if model_type == 'random_forest':
-            # Optimized Random Forest parameters for financial time series forecasting
+            # Enhanced Random Forest parameters specifically optimized for market prediction with VIX data
             model = RandomForestRegressor(
-                n_estimators=200,               # More trees for better stability
-                max_depth=15,                   # Control depth to prevent overfitting
-                min_samples_split=5,            # Require more samples to split nodes
-                min_samples_leaf=4,             # Ensure leaf nodes have sufficient samples
-                max_features='sqrt',            # Use sqrt(n_features) for each split decision
+                n_estimators=300,               # More trees for better stability and VIX feature integration
+                max_depth=12,                   # Slightly reduced depth to avoid overfitting with VIX features
+                min_samples_split=4,            # Require more samples to split nodes
+                min_samples_leaf=3,             # Ensure leaf nodes have sufficient samples
+                max_features='auto',            # Use all features (better for financial indicators)
                 bootstrap=True,                 # Use bootstrap samples
                 n_jobs=-1,                      # Use all available cores for training
                 criterion='squared_error',      # Mean squared error criterion
@@ -174,8 +174,8 @@ def train_model(data, features, target_column, model_type='random_forest', test_
                 oob_score=True,                 # Use out-of-bag samples for validation
                 warm_start=False,               # Build a new forest each time
                 max_leaf_nodes=None,            # No limit on leaf nodes
-                min_impurity_decrease=0.0,      # Standard impurity decrease
-                ccp_alpha=0.0                   # No complexity pruning
+                min_impurity_decrease=0.0001,   # Add minimal impurity decrease threshold for better stability
+                ccp_alpha=0.001                 # Add minimal complexity pruning for robustness
             )
         elif model_type == 'gradient_boosting':
             model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
@@ -263,6 +263,7 @@ def predict_returns(model_result, current_data, features):
     # Make sure all required features are in the data
     missing_features = [f for f in features if f not in current_data.columns]
     if missing_features:
+        print(f"Missing features for prediction: {missing_features}")
         return None
     
     try:
@@ -271,12 +272,19 @@ def predict_returns(model_result, current_data, features):
         if model is None:
             return None
         
-        # Prepare input data
-        X = current_data[features].iloc[-1:].values
+        # Prepare input data - use DataFrame instead of numpy array to preserve feature names
+        # This fixes the "X does not have valid feature names" warning
+        X = current_data[features].iloc[-1:].copy()
         
         # Make prediction
         prediction = float(model.predict(X)[0])
         
+        # Sanity check on prediction (cap extreme values)
+        if prediction > 50:  # Cap unrealistic positive returns
+            prediction = 50.0
+        elif prediction < -50:  # Cap unrealistic negative returns
+            prediction = -50.0
+            
         return prediction
     
     except Exception as e:
