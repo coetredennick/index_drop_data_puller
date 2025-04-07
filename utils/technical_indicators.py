@@ -40,13 +40,23 @@ def calculate_technical_indicators(data):
     # Calculate all technical indicators at once
     df.ta.strategy(strat)
     
-    # Calculate Bollinger Band Position (normalized position within Bollinger Bands)
-    if all(col in df.columns for col in ['BBL_20_2.0', 'BBU_20_2.0']):
-        df['BBP_20_2'] = (df['Close'] - df['BBL_20_2.0']) / (df['BBU_20_2.0'] - df['BBL_20_2.0'])
+    # Fix Bollinger Bands naming to match what's expected by the ML model
+    # Rename from pandas_ta format (with decimal) to the format expected by ML model
+    if 'BBL_20_2.0' in df.columns:
+        df['BBL_20_2'] = df['BBL_20_2.0']
+    if 'BBM_20_2.0' in df.columns:
+        df['BBM_20_2'] = df['BBM_20_2.0']
+    if 'BBU_20_2.0' in df.columns:
+        df['BBU_20_2'] = df['BBU_20_2.0']
     
-    # Calculate ATR as percentage of price
+    # Calculate Bollinger Band Position (normalized position within Bollinger Bands)
+    if all(col in df.columns for col in ['BBL_20_2', 'BBU_20_2']):
+        df['BBP_20_2'] = (df['Close'] - df['BBL_20_2']) / (df['BBU_20_2'] - df['BBL_20_2'])
+    
+    # Handle ATR naming and calculations
     if 'ATRr_14' in df.columns:
-        df['ATR_Pct'] = df['ATRr_14'] / df['Close'] * 100
+        df['ATR_14'] = df['ATRr_14']  # Rename to format expected by ML model
+        df['ATR_Pct'] = df['ATR_14'] / df['Close'] * 100
     
     # Volume analysis - make sure names match those in ML model features
     # Calculate average volumes

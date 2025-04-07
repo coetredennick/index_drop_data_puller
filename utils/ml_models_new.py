@@ -315,8 +315,13 @@ def train_model(data, features, target_column, model_type='random_forest', test_
         required_columns = features + [target_column]
         valid_data = data[required_columns].dropna()
         
-        if len(valid_data) < 10:  # Need enough data for meaningful training
-            return {'success': False, 'error': 'Insufficient data after removing invalid rows'}
+        # For historical drop analysis, we may have fewer data points due to the rarity of drop events
+        # Adjust the minimum required rows based on the data context
+        min_required_rows = 5  # Reduced from 10 to allow for rare historical events
+        
+        if len(valid_data) < min_required_rows:
+            print(f"WARNING: Only {len(valid_data)} valid data points found after filtering - minimum {min_required_rows} required")
+            return {'success': False, 'error': f'Insufficient data after removing invalid rows ({len(valid_data)} valid rows found, minimum {min_required_rows} required)'}
         
         # Split features and target
         X = valid_data[features]
@@ -1078,31 +1083,79 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
     missing_features = [f for f in features if f not in data.columns]
     if missing_features:
         # Print detailed debug information to find the issue
-        print(f"DEBUG: Missing features in create_forecast_chart: {', '.join(missing_features)}")
-        print(f"DEBUG: Available columns: {', '.join(data.columns)}")
+        print(f"WARNING: Missing features in create_forecast_chart: {', '.join(missing_features)}")
+        print(f"Available columns: {', '.join(data.columns)}")
         
         # Check for case-sensitivity issues
         lowercase_columns = [col.lower() for col in data.columns]
         case_issues = [f for f in missing_features if f.lower() in lowercase_columns]
         if case_issues:
-            print(f"DEBUG: Possible case sensitivity issues with: {', '.join(case_issues)}")
+            print(f"Possible case sensitivity issues with: {', '.join(case_issues)}")
         
-        # Add missing columns with NaN values to make the function work
+        # Add missing columns with appropriate default values to make the function work
         for feature in missing_features:
-            data[feature] = np.nan
-            print(f"DEBUG: Added missing feature with NaN values: {feature}")
+            # Set sensible defaults based on feature naming patterns
+            if feature in ['BBU_20_2', 'BBM_20_2', 'BBL_20_2']:
+                # Bollinger Bands - use close price as baseline
+                if feature == 'BBU_20_2': 
+                    data[feature] = data['Close'] * 1.02  # Upper band ~2% above price
+                elif feature == 'BBL_20_2':
+                    data[feature] = data['Close'] * 0.98  # Lower band ~2% below price
+                else:
+                    data[feature] = data['Close']  # Middle band = price
+                print(f"Added missing Bollinger Band feature with realistic values: {feature}")
+                
+            elif feature == 'ATR_14':
+                # Average True Range - use a small percentage of price
+                data[feature] = data['Close'] * 0.01  # ATR about 1% of price
+                print(f"Added missing ATR feature with realistic values: {feature}")
+                
+            elif 'vol' in feature.lower() or 'volume' in feature.lower():
+                # Volume-related features - use average volume or 1.0 for ratios
+                if 'ratio' in feature.lower():
+                    data[feature] = 1.0  # Neutral ratio
+                else:
+                    data[feature] = data['Volume'].mean() if 'Volume' in data.columns else 1000000
+                print(f"Added missing volume feature with neutral values: {feature}")
+                
+            elif 'VIX' in feature:
+                # VIX-related features - use moderate values
+                if 'Close' in feature:
+                    data[feature] = 20.0  # Long-term VIX average
+                elif 'Avg' in feature:
+                    data[feature] = 20.0
+                elif 'Rel' in feature:
+                    data[feature] = 0.0  # Neutral relative value
+                else:
+                    data[feature] = 0.0
+                print(f"Added missing VIX feature with neutral values: {feature}")
+                
+            elif any(x in feature for x in ['Decline', 'Drawdown', 'Peak']):
+                # Decline metrics - use neutral values indicating no decline
+                data[feature] = 0.0
+                print(f"Added missing decline metric with neutral values: {feature}")
+                
+            else:
+                # Generic fallback - use NaN values
+                data[feature] = np.nan
+                print(f"Added missing feature with NaN values (default): {feature}")
         
-        fig.update_layout(
-            title=title,
-            annotations=[dict(
-                text=f"Missing ML features (added with placeholders): {', '.join(missing_features[:3])}{'...' if len(missing_features) > 3 else ''}",
-                xref="paper",
-                yref="paper",
-                x=0.5,
-                y=0.5,
-                showarrow=False
-            )],
-            height=height
+        # Add a warning annotation but still allow the chart to render
+        fig.add_annotation(
+            text=f"Warning: Some ML features were missing and replaced with default values.",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.98,
+            showarrow=False,
+            font=dict(
+                color="red",
+                size=10
+            ),
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="red",
+            borderwidth=1,
+            borderpad=4
         )
     
     # Get the last available data point (most recent trading day)
