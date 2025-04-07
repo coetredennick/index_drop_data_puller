@@ -262,6 +262,11 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
     # Only include columns that actually exist in the data
     features = [f for f in feature_columns if f in df.columns]
     
+    # Debug: print missing features to help troubleshoot
+    missing_features = [f for f in feature_columns if f not in df.columns]
+    if missing_features:
+        print(f"WARNING: Missing features in prepare_features: {', '.join(missing_features[:10])}")
+    
     # Handle NaN values - drop rows with NaN in any of the selected features or target columns
     required_columns = features + [c for c in df.columns if c.startswith('Fwd_Ret_')]
     df = df.dropna(subset=required_columns)
@@ -1072,10 +1077,25 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
     # Error handling: Check if all required features are available
     missing_features = [f for f in features if f not in data.columns]
     if missing_features:
+        # Print detailed debug information to find the issue
+        print(f"DEBUG: Missing features in create_forecast_chart: {', '.join(missing_features)}")
+        print(f"DEBUG: Available columns: {', '.join(data.columns)}")
+        
+        # Check for case-sensitivity issues
+        lowercase_columns = [col.lower() for col in data.columns]
+        case_issues = [f for f in missing_features if f.lower() in lowercase_columns]
+        if case_issues:
+            print(f"DEBUG: Possible case sensitivity issues with: {', '.join(case_issues)}")
+        
+        # Add missing columns with NaN values to make the function work
+        for feature in missing_features:
+            data[feature] = np.nan
+            print(f"DEBUG: Added missing feature with NaN values: {feature}")
+        
         fig.update_layout(
             title=title,
             annotations=[dict(
-                text=f"Missing ML features: {', '.join(missing_features[:3])}{'...' if len(missing_features) > 3 else ''}",
+                text=f"Missing ML features (added with placeholders): {', '.join(missing_features[:3])}{'...' if len(missing_features) > 3 else ''}",
                 xref="paper",
                 yref="paper",
                 x=0.5,
@@ -1084,7 +1104,6 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
             )],
             height=height
         )
-        return fig
     
     # Get the last available data point (most recent trading day)
     last_date = data.index[-1]

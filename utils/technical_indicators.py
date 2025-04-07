@@ -48,9 +48,24 @@ def calculate_technical_indicators(data):
     if 'ATRr_14' in df.columns:
         df['ATR_Pct'] = df['ATRr_14'] / df['Close'] * 100
     
-    # Volume analysis
-    df['Volume_Ratio'] = df['Volume'] / df['Volume'].rolling(window=50).mean()
-    df['Avg_Vol_50'] = df['Volume'].rolling(window=50).mean()
+    # Volume analysis - make sure names match those in ML model features
+    # Calculate average volumes
+    df['avg_vol_10'] = df['Volume'].rolling(window=10).mean()
+    df['avg_vol_20'] = df['Volume'].rolling(window=20).mean()
+    df['avg_vol_50'] = df['Volume'].rolling(window=50).mean()
+    
+    # Calculate volume ratios (current volume to average)
+    df['volume_ratio_10d'] = df['Volume'] / df['avg_vol_10']
+    df['volume_ratio_20d'] = df['Volume'] / df['avg_vol_20']
+    df['volume_ratio_50d'] = df['Volume'] / df['avg_vol_50']
+    
+    # Calculate additional volume metrics used by ML features
+    df['Volume_ROC_5d'] = df['Volume'].pct_change(periods=5) * 100
+    df['Vol_10_50_Ratio'] = df['avg_vol_10'] / df['avg_vol_50']
+    
+    # Legacy names (keep for backward compatibility)
+    df['Volume_Ratio'] = df['volume_ratio_50d']
+    df['Avg_Vol_50'] = df['avg_vol_50']
     
     # Calculate price in relation to moving averages
     if 'SMA_50' in df.columns:
@@ -63,7 +78,85 @@ def calculate_technical_indicators(data):
         df['Golden_Cross'] = (df['SMA_50'] > df['SMA_200']) & (df['SMA_50'].shift(1) <= df['SMA_200'].shift(1))
         df['Death_Cross'] = (df['SMA_50'] < df['SMA_200']) & (df['SMA_50'].shift(1) >= df['SMA_200'].shift(1))
     
-    # Clean up NaN values
+    # Add VIX-related features if VIX data is available
+    if 'VIX_Close' in df.columns:
+        # VIX Moving Averages
+        df['VIX_5D_Avg'] = df['VIX_Close'].rolling(window=5).mean()
+        df['VIX_20D_Avg'] = df['VIX_Close'].rolling(window=20).mean()
+        
+        # VIX relative to its averages
+        df['VIX_Rel_5D'] = (df['VIX_Close'] / df['VIX_5D_Avg'] - 1) * 100
+        df['VIX_Rel_20D'] = (df['VIX_Close'] / df['VIX_20D_Avg'] - 1) * 100
+        
+        # VIX daily range
+        if all(col in df.columns for col in ['VIX_High', 'VIX_Low']):
+            df['VIX_HL_Range'] = (df['VIX_High'] - df['VIX_Low']) / df['VIX_Close'] * 100
+        
+        # VIX return
+        df['VIX_Return'] = df['VIX_Close'].pct_change() * 100
+    
+    # Add rate of decline metrics
+    # Calculate rolling sum of negative returns
+    df['Rolling_5d_Neg_Returns'] = df['Return'].apply(lambda x: min(x, 0)).rolling(window=5).sum()
+    df['Rolling_10d_Neg_Returns'] = df['Return'].apply(lambda x: min(x, 0)).rolling(window=10).sum()
+    
+    # Count negative days in rolling windows
+    df['Rolling_5d_Neg_Days'] = df['Return'].apply(lambda x: 1 if x < 0 else 0).rolling(window=5).sum()
+    
+    # Current decline rate metrics
+    df['Decline_Rate_Per_Day'] = df['Return'].apply(lambda x: x if x < 0 else 0)
+    
+    # Maximum daily decline in rolling window
+    df['Max_Daily_Decline'] = df['Return'].rolling(window=5).min()
+    
+    # Average decline rate over 5 days (only counting negative days)
+    df['Avg_Decline_Rate_5d'] = df['Rolling_5d_Neg_Returns'] / df['Rolling_5d_Neg_Days'].replace(0, np.nan)
+    
+    # Standard deviation of declines (volatility of declines)
+    df['Decline_Volatility_5d'] = df['Return'].apply(lambda x: x if x < 0 else np.nan).rolling(window=5).std()
+    
+    # Flag for accelerating decline pattern
+    # Define accelerating decline as when each day's decline is worse than the previous
+    df['Accelerating_Decline'] = df['Return'].rolling(window=3).apply(
+        lambda x: 1 if (len(x) == 3 and x[0] < 0 and x[1] < 0 and x[2] < 0 and x[0] > x[1] > x[2]) else 0,
+        raw=True
+    )
+    
+    # Drawdown metrics
+    # Find running maximum (peak)
+    df['Running_Max'] = df['Close'].cummax()
+    # Calculate drawdown from peak
+    df['Drawdown_From_Peak_Pct'] = (df['Close'] / df['Running_Max'] - 1) * 100
+    
+    # Calculate days since peak
+    df['Days_Since_Peak'] = (df['Close'] != df['Running_Max']).cumsum() - (df['Close'] != df['Running_Max']).cumulative_min()
+    
+    # Calculate rate of decline from peak
+    df['Peak_To_End_Rate'] = df['Drawdown_From_Peak_Pct'] / df['Days_Since_Peak'].replace(0, 1)
+    
+    # Calculate percentage of drawdown (useful for understanding where we are in drawdown cycle)
+    df['Max_Drawdown_20D'] = df['Drawdown_From_Peak_Pct'].rolling(window=20).min()
+    df['Pct_Of_Drawdown'] = df['Drawdown_From_Peak_Pct'] / df['Max_Drawdown_20D'].replace(0, np.nan) * 100
+    
+    # Set decline duration (for single day events this is 1)
+    df['Decline_Duration'] = (df['Return'] < 0).astype(int)
+    
+    # Price-Volume Correlation (rolling 10-day correlation between price changes and volume)
+    df['Price_Volume_Correlation'] = df['Return'].rolling(10).corr(df['Volume'])
+    
+    # Volume Momentum (acceleration in volume)
+    df['Volume_Momentum'] = df['Volume'].pct_change().rolling(5).mean() * 100
+    
+    # On-Balance Volume (OBV)
+    df['OBV'] = (np.sign(df['Return']) * df['Volume']).cumsum()
+    
+    # Volume-Weighted Average Price (VWAP) Ratio
+    # Simplified calculation using daily data
+    df['Daily_VWAP'] = (df['High'] + df['Low'] + df['Close']) / 3 * df['Volume']
+    df['Cum_VWAP'] = df['Daily_VWAP'].rolling(20).sum() / df['Volume'].rolling(20).sum()
+    df['VWAP_Ratio'] = df['Close'] / df['Cum_VWAP']
+    
+    # Clean up NaN values for essential indicators
     df = df.dropna(subset=['RSI_14', 'MACDh_12_26_9'])
     
     return df
