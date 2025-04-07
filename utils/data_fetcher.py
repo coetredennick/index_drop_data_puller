@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import os
 
 @st.cache_data(ttl=3600)  # Cache data for 1 hour
-def fetch_sp500_data(start_date, end_date):
+def fetch_sp500_data(start_date, end_date, include_vix=True):
     """
     Fetch S&P 500 historical data from Yahoo Finance
     
@@ -16,11 +16,13 @@ def fetch_sp500_data(start_date, end_date):
         Start date in the format 'YYYY-MM-DD'
     end_date : str
         End date in the format 'YYYY-MM-DD'
+    include_vix : bool, optional
+        Whether to include VIX data (default: True)
         
     Returns:
     --------
     pandas.DataFrame
-        DataFrame containing S&P 500 historical data
+        DataFrame containing S&P 500 historical data with VIX data if requested
     """
     try:
         # Fetch data
@@ -52,6 +54,56 @@ def fetch_sp500_data(start_date, end_date):
         # Forward returns for different time periods
         for days, label in [(5, '1W'), (21, '1M'), (63, '3M'), (126, '6M'), (252, '1Y'), (756, '3Y')]:
             sp500[f'Fwd_Ret_{label}'] = sp500['Close'].pct_change(periods=days).shift(-days) * 100
+        
+        # Fetch VIX data if requested
+        if include_vix:
+            try:
+                # Fetch VIX data
+                vix_data = yf.download(
+                    "^VIX",
+                    start=start_date,
+                    end=end_date,
+                    progress=False
+                )
+                
+                if not vix_data.empty:
+                    # Fix for MultiIndex columns - flatten the columns
+                    if isinstance(vix_data.columns, pd.MultiIndex):
+                        vix_data.columns = [f'VIX_{col[0]}' for col in vix_data.columns]
+                    else:
+                        vix_data.columns = [f'VIX_{col}' for col in vix_data.columns]
+                    
+                    # Calculate VIX daily changes and returns
+                    vix_data['VIX_Return'] = vix_data['VIX_Close'].pct_change() * 100
+                    
+                    # Add a 5-day rolling average of VIX (used as a feature in ML models)
+                    vix_data['VIX_5D_Avg'] = vix_data['VIX_Close'].rolling(window=5).mean()
+                    
+                    # Add a 20-day rolling average of VIX (used as a feature in ML models)
+                    vix_data['VIX_20D_Avg'] = vix_data['VIX_Close'].rolling(window=20).mean()
+                    
+                    # Calculate VIX relative to its moving averages
+                    vix_data['VIX_Rel_5D'] = (vix_data['VIX_Close'] / vix_data['VIX_5D_Avg'] - 1) * 100
+                    vix_data['VIX_Rel_20D'] = (vix_data['VIX_Close'] / vix_data['VIX_20D_Avg'] - 1) * 100
+                    
+                    # Calculate high-low volatility range
+                    vix_data['VIX_HL_Range'] = (vix_data['VIX_High'] - vix_data['VIX_Low']) / vix_data['VIX_Open'] * 100
+                    
+                    # Join VIX data with S&P 500 data
+                    sp500 = sp500.join(vix_data[[
+                        'VIX_Close', 'VIX_Return', 'VIX_5D_Avg', 'VIX_20D_Avg', 
+                        'VIX_Rel_5D', 'VIX_Rel_20D', 'VIX_HL_Range'
+                    ]])
+                    
+                    # Fill any NaN values in VIX columns with forward filling, then backward filling
+                    vix_cols = [col for col in sp500.columns if col.startswith('VIX_')]
+                    if vix_cols:
+                        sp500[vix_cols] = sp500[vix_cols].fillna(method='ffill').fillna(method='bfill')
+                
+            except Exception as e:
+                # Log the error but continue without VIX data
+                print(f"Error fetching VIX data: {e}")
+                # Continue without VIX data
         
         return sp500
         

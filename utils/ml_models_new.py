@@ -85,7 +85,16 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         'ATR_14',             # Average True Range
         'ATR_Pct',            # ATR as % of price
         'Avg_Vol_50',         # 50-day average volume
-        'Volume_Ratio'        # Volume compared to 50-day average
+        'Volume_Ratio',       # Volume compared to 50-day average
+        
+        # VIX-related features
+        'VIX_Close',          # VIX closing value
+        'VIX_Return',         # VIX daily return (%)
+        'VIX_5D_Avg',         # 5-day VIX moving average
+        'VIX_20D_Avg',        # 20-day VIX moving average
+        'VIX_Rel_5D',         # VIX relative to 5-day average (%)
+        'VIX_Rel_20D',        # VIX relative to 20-day average (%)
+        'VIX_HL_Range'        # VIX daily high-low range (%)
     ]
     
     # Only include columns that actually exist in the data

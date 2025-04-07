@@ -138,9 +138,17 @@ def show_ml_predictions():
     with col1:
         # Only use Random Forest model - the best model type for this application
         st.markdown("""
-        <div style="padding: 10px; background-color: #f0f8ff; border-radius: 5px; border-left: 4px solid #4682B4;">
+        <div style="padding: 10px; background-color: #f0f8ff; border-radius: 5px; border-left: 4px solid #4682B4; margin-bottom: 10px;">
             <p style="margin: 0; font-weight: 600; color: #104E8B;">🌲 Using Optimized Random Forest Model</p>
             <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #666;">Advanced ensemble learning algorithm specifically tuned for market pattern recognition</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # VIX data integration info
+        st.markdown("""
+        <div style="padding: 10px; background-color: #fff8f0; border-radius: 5px; border-left: 4px solid #FF8C00;">
+            <p style="margin: 0; font-weight: 600; color: #D35400;">📊 VIX Data Integration</p>
+            <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #666;">Volatility Index data now enhances prediction accuracy by capturing market sentiment and fear</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -280,11 +288,12 @@ def show_ml_predictions():
         {"name": "RSI (14)", "value": latest_data.get('RSI_14', 'N/A'), "color": "red" if latest_data.get('RSI_14', 50) > 70 else "green" if latest_data.get('RSI_14', 50) < 30 else "gray", "description": "Measures momentum - values >70 suggest overbought, <30 oversold"},
         {"name": "MACD", "value": latest_data.get('MACDh_12_26_9', 'N/A'), "color": "green" if latest_data.get('MACDh_12_26_9', 0) > 0 else "red", "description": "Trend indicator - positive values suggest bullish momentum"},
         {"name": "BB Position", "value": latest_data.get('BBP_20_2', 'N/A'), "color": "red" if latest_data.get('BBP_20_2', 0.5) > 1 else "green" if latest_data.get('BBP_20_2', 0.5) < 0 else "gray", "description": "Position within Bollinger Bands - >1 overbought, <0 oversold"},
-        {"name": "ATR %", "value": latest_data.get('ATR_Pct', 'N/A'), "color": "orange" if latest_data.get('ATR_Pct', 1) > 3 else "blue", "description": "Measures volatility - higher values indicate more market volatility"}
+        {"name": "ATR %", "value": latest_data.get('ATR_Pct', 'N/A'), "color": "orange" if latest_data.get('ATR_Pct', 1) > 3 else "blue", "description": "Measures volatility - higher values indicate more market volatility"},
+        {"name": "VIX", "value": latest_data.get('VIX_Close', 'N/A'), "color": "red" if latest_data.get('VIX_Close', 20) > 30 else "orange" if latest_data.get('VIX_Close', 20) > 20 else "green", "description": "Volatility Index - higher values indicate higher expected volatility"}
     ]
     
-    # Display indicators in a grid
-    cols = st.columns(4)
+    # Display indicators in a grid (5 columns now to include VIX)
+    cols = st.columns(5)
     for i, indicator in enumerate(indicators):
         with cols[i]:
             value = indicator["value"]
