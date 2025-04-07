@@ -64,24 +64,22 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
             ret = ((end_price / start_price) - 1) * 100
             df.loc[df.index[i], col_name] = ret
     
-    # If focusing on market drops, filter to only those events
+    # Calculate all essential volume indicators BEFORE filtering for drops
+    # This ensures all necessary features exist even after filtering
+    if 'Volume' in df.columns:
+        # Calculate volume moving averages if not already present (use lowercase to standardize)
+        df['avg_vol_10'] = df['Volume'].rolling(window=10).mean()
+        df['avg_vol_20'] = df['Volume'].rolling(window=20).mean() 
+        df['avg_vol_50'] = df['Volume'].rolling(window=50).mean()
+        
+        # Add volume ratios (use lowercase to standardize)
+        df['volume_ratio_10d'] = df['Volume'] / df['avg_vol_10']
+        df['volume_ratio_20d'] = df['Volume'] / df['avg_vol_20']
+        df['volume_ratio_50d'] = df['Volume'] / df['avg_vol_50']
+    
+    # If focusing on market drops, filter to only those events AFTER calculating initial metrics
     if focus_on_drops:
         df = df[df['Return'] <= drop_threshold].copy()
-    
-    # Calculate advanced volume indicators
-    if 'Volume' in df.columns:
-        # Calculate volume moving averages if not already present
-        if 'Avg_Vol_10' not in df.columns:
-            df['Avg_Vol_10'] = df['Volume'].rolling(window=10).mean()
-        if 'Avg_Vol_20' not in df.columns:
-            df['Avg_Vol_20'] = df['Volume'].rolling(window=20).mean()
-        if 'Avg_Vol_50' not in df.columns:
-            df['Avg_Vol_50'] = df['Volume'].rolling(window=50).mean()
-            
-        # Add volume ratios
-        df['Volume_Ratio_10d'] = df['Volume'] / df['Avg_Vol_10']
-        df['Volume_Ratio_20d'] = df['Volume'] / df['Avg_Vol_20']
-        df['Volume_Ratio_50d'] = df['Volume'] / df['Avg_Vol_50']
         
         # Add volume rate of change
         df['Volume_ROC_5d'] = df['Volume'].pct_change(periods=5) * 100
@@ -220,12 +218,12 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         'BBP_20_2',           # Bollinger Band Position
         'ATR_14',             # Average True Range
         'ATR_Pct',            # ATR as % of price
-        'Avg_Vol_10',         # 10-day average volume
-        'Avg_Vol_20',         # 20-day average volume
-        'Avg_Vol_50',         # 50-day average volume
-        'Volume_Ratio_10d',   # Volume compared to 10-day average
-        'Volume_Ratio_20d',   # Volume compared to 20-day average
-        'Volume_Ratio_50d',   # Volume compared to 50-day average
+        'avg_vol_10',         # 10-day average volume (lowercase)
+        'avg_vol_20',         # 20-day average volume (lowercase)
+        'avg_vol_50',         # 50-day average volume (lowercase)
+        'volume_ratio_10d',   # Volume compared to 10-day average (lowercase)
+        'volume_ratio_20d',   # Volume compared to 20-day average (lowercase)
+        'volume_ratio_50d',   # Volume compared to 50-day average (lowercase)
         'Volume_ROC_5d',      # 5-day volume rate of change
         'Vol_10_50_Ratio',    # Ratio of short to long term volume
         'Price_Volume_Correlation', # Correlation between price and volume
@@ -1181,9 +1179,9 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
                 
                 # Calculate volume-adjusted volatility if volume data is available
                 volume_adjusted_volatility = base_volatility
-                if 'Volume' in data.columns and 'Avg_Vol_20' in data.columns:
+                if 'Volume' in data.columns and 'avg_vol_20' in data.columns:
                     # Recent volume relative to average (higher volume often correlates with higher volatility)
-                    recent_volume_ratio = float(data['Volume'].iloc[-1] / data['Avg_Vol_20'].iloc[-1])
+                    recent_volume_ratio = float(data['Volume'].iloc[-1] / data['avg_vol_20'].iloc[-1])
                     
                     # Scale volatility based on recent volume - if volume is high, volatility may be higher
                     # Dampen the effect to avoid extremes (use sqrt for less extreme scaling)

@@ -170,12 +170,21 @@ def show_ml_predictions():
     
     # Coordinated forecast horizon selector based on target period
     recommended_days = target_period_days.get(target_period, 252)
+    
+    # Ensure values are compatible with step
+    min_val = max(5, recommended_days // 2)
+    max_val = max(365, recommended_days * 4)
+    step_val = max(5, recommended_days // 10)
+    
+    # Adjust recommended_days to be compatible with step
+    recommended_days = (recommended_days // step_val) * step_val
+    
     forecast_days = st.slider(
         "Forecast Horizon (Days)",
-        min_value=max(5, recommended_days // 2), 
-        max_value=max(365, recommended_days * 4),
+        min_value=min_val, 
+        max_value=max_val,
         value=recommended_days,  # Default to match training target
-        step=max(5, recommended_days // 10),
+        step=step_val,
         help="Number of days to forecast into the future (auto-adjusted based on training target)"
     )
     
