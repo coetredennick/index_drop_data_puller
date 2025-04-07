@@ -27,10 +27,15 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         DataFrame with features for ML models, and list of feature names
     """
     if data is None or data.empty:
+        print("ERROR: No data provided to prepare_features")
         return pd.DataFrame(), []
     
     # Make a copy to avoid modifying the original data
     df = data.copy()
+    
+    # Add diagnostic information
+    if isinstance(df.index, pd.DatetimeIndex):
+        print(f"DATA RANGE: {df.index.min()} to {df.index.max()} - {len(df)} trading days")
     
     # Reset index to make Date a column for easier merging and filtering
     if isinstance(df.index, pd.DatetimeIndex):
@@ -38,6 +43,25 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         date_column = 'index'
     else:
         date_column = 'Date'
+        
+    # Check if this is historical data from before VIX was available (VIX started in 1990)
+    has_vix_data = any(col.startswith('VIX_') for col in df.columns)
+    if not has_vix_data:
+        print("NOTE: This dataset does not have VIX data - likely historical data before 1990.")
+        
+        # Add placeholder VIX columns with neutral values
+        vix_columns = ['VIX_Close', 'VIX_Return', 'VIX_5D_Avg', 'VIX_20D_Avg', 
+                       'VIX_Rel_5D', 'VIX_Rel_20D', 'VIX_HL_Range']
+                       
+        for col in vix_columns:
+            if col == 'VIX_Close' or col.endswith('_Avg'):
+                df[col] = 20.0  # Long-term VIX average
+            elif col == 'VIX_Return' or col.startswith('VIX_Rel'):
+                df[col] = 0.0  # Neutral
+            elif col == 'VIX_HL_Range':
+                df[col] = 5.0  # Typical daily range
+        
+        print("Added placeholder VIX data with historically representative values")
     
     # Ensure we have a Return column
     if 'Return' not in df.columns and 'Close' in df.columns:
@@ -317,11 +341,21 @@ def train_model(data, features, target_column, model_type='random_forest', test_
         
         # For historical drop analysis, we may have fewer data points due to the rarity of drop events
         # Adjust the minimum required rows based on the data context
-        min_required_rows = 5  # Reduced from 10 to allow for rare historical events
+        min_required_rows = 3  # Further reduced to handle extremely rare drop events
         
         if len(valid_data) < min_required_rows:
             print(f"WARNING: Only {len(valid_data)} valid data points found after filtering - minimum {min_required_rows} required")
             return {'success': False, 'error': f'Insufficient data after removing invalid rows ({len(valid_data)} valid rows found, minimum {min_required_rows} required)'}
+            
+        # Calculate and print the actual test size based on data
+        actual_test_samples = max(1, int(len(valid_data) * test_size))
+        print(f"Data split: {len(valid_data) - actual_test_samples} training samples, {actual_test_samples} test samples")
+        
+        # For very small datasets, adjust test_size to ensure we have at least 2 samples for training
+        if len(valid_data) <= 5:
+            adjusted_test_size = 1 / len(valid_data)  # Just 1 sample for testing
+            print(f"Adjusted test size to {adjusted_test_size:.2f} due to limited data")
+            test_size = adjusted_test_size
         
         # Split features and target
         X = valid_data[features]
@@ -332,23 +366,44 @@ def train_model(data, features, target_column, model_type='random_forest', test_
         
         # Initialize the right model type
         if model_type == 'random_forest':
-            # Enhanced Random Forest parameters specifically optimized for market prediction with VIX data
-            model = RandomForestRegressor(
-                n_estimators=300,               # More trees for better stability and VIX feature integration
-                max_depth=12,                   # Slightly reduced depth to avoid overfitting with VIX features
-                min_samples_split=4,            # Require more samples to split nodes
-                min_samples_leaf=3,             # Ensure leaf nodes have sufficient samples
-                max_features='sqrt',            # Use sqrt(n_features) - standard approach for market prediction
-                bootstrap=True,                 # Use bootstrap samples
-                n_jobs=-1,                      # Use all available cores for training
-                criterion='squared_error',      # Mean squared error criterion
-                random_state=42,                # For reproducibility
-                oob_score=True,                 # Use out-of-bag samples for validation
-                warm_start=False,               # Build a new forest each time
-                max_leaf_nodes=None,            # No limit on leaf nodes
-                min_impurity_decrease=0.0001,   # Add minimal impurity decrease threshold for better stability
-                ccp_alpha=0.001                 # Add minimal complexity pruning for robustness
-            )
+            # Check if we're dealing with a very small dataset for rare historical events
+            if len(valid_data) < 10:
+                print(f"Using specialized Random Forest parameters for small dataset ({len(valid_data)} rows)")
+                # Simplified model for very small datasets
+                model = RandomForestRegressor(
+                    n_estimators=100,               # Fewer trees for small datasets
+                    max_depth=5,                    # Smaller tree depth to avoid overfitting
+                    min_samples_split=2,            # Minimum value to enable more splits
+                    min_samples_leaf=1,             # Minimum value to enable more leaves
+                    max_features='sqrt',            # Standard feature selection
+                    bootstrap=True,                 # Use bootstrap samples
+                    n_jobs=-1,                      # Use all available cores
+                    criterion='squared_error',      # Mean squared error criterion
+                    random_state=42,                # For reproducibility
+                    oob_score=False,                # Disable OOB score for very small datasets
+                    warm_start=False,               # Build a new forest each time
+                    max_leaf_nodes=None,            # No limit on leaf nodes
+                    min_impurity_decrease=0,        # No minimum impurity decrease
+                    ccp_alpha=0                     # No cost complexity pruning
+                )
+            else:
+                # Enhanced Random Forest parameters specifically optimized for market prediction with VIX data
+                model = RandomForestRegressor(
+                    n_estimators=300,               # More trees for better stability and VIX feature integration
+                    max_depth=12,                   # Slightly reduced depth to avoid overfitting with VIX features
+                    min_samples_split=4,            # Require more samples to split nodes
+                    min_samples_leaf=3,             # Ensure leaf nodes have sufficient samples
+                    max_features='sqrt',            # Use sqrt(n_features) - standard approach for market prediction
+                    bootstrap=True,                 # Use bootstrap samples
+                    n_jobs=-1,                      # Use all available cores for training
+                    criterion='squared_error',      # Mean squared error criterion
+                    random_state=42,                # For reproducibility
+                    oob_score=True,                 # Use out-of-bag samples for validation
+                    warm_start=False,               # Build a new forest each time
+                    max_leaf_nodes=None,            # No limit on leaf nodes
+                    min_impurity_decrease=0.0001,   # Add minimal impurity decrease threshold for better stability
+                    ccp_alpha=0.001                 # Add minimal complexity pruning for robustness
+                )
         elif model_type == 'gradient_boosting':
             model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
         elif model_type == 'linear_regression':
