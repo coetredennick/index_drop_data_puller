@@ -425,17 +425,17 @@ def show_historical_performance():
     # Format all columns directly without using format_dict
     for col in formatted_df.columns:
         if '%' in col and col != 'Daily Drops':  # Format percentage columns, except for the detailed daily drops
-            # Format as percentage with one decimal place
+            # Format as percentage with one decimal place - check for string values
             formatted_df[col] = formatted_df[col].apply(
-                lambda x: f"{x:.1f}%" if pd.notna(x) and isinstance(x, (int, float)) else x
+                lambda x: f"{x:.1f}%" if pd.notna(x) and isinstance(x, (int, float)) else str(x)
             )
         elif col == 'Date' or col == 'Type' or col == 'Severity' or col == 'Daily Drops':
             # Keep these columns as is (string columns)
             continue
         else:
-            # Format other numeric columns with commas for thousands
+            # Format other numeric columns with commas for thousands - check for string values
             formatted_df[col] = formatted_df[col].apply(
-                lambda x: f"{x:,.0f}" if pd.notna(x) and isinstance(x, (int, float)) else x
+                lambda x: f"{x:,.0f}" if pd.notna(x) and isinstance(x, (int, float)) else str(x)
             )
     
     # Apply color formatting

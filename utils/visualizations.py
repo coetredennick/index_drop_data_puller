@@ -478,8 +478,15 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
         end_ts = pd.Timestamp(end_date)
         
         # Filter data for the selected period using consistent timestamp format
+        # We need to ensure all comparisons are using the same data type
         mask = (data_copy.index >= start_ts) & (data_copy.index <= end_ts)
-        period_data = data_copy.loc[mask].copy()
+        
+        # Handle the case if mask creation fails due to type mismatch
+        if not isinstance(mask, pd.Series):
+            # Alternative approach that's more explicit about types
+            mask = [(idx >= start_ts) and (idx <= end_ts) for idx in data_copy.index]
+            
+        period_data = data_copy.loc[mask].copy() if isinstance(mask, pd.Series) else data_copy.loc[mask].copy()
     except Exception as e:
         # Handle any errors in date processing
         print(f"Error processing dates in recovery chart: {e}")
@@ -777,9 +784,16 @@ def create_technical_indicator_chart(data, event, indicator, title=None, height=
         start_ts = pd.Timestamp(start_date) if not isinstance(start_date, pd.Timestamp) else start_date
         end_ts = pd.Timestamp(end_date) if not isinstance(end_date, pd.Timestamp) else end_date
         
-        # Filter data for the selected period
+        # Filter data for the selected period using consistent timestamp format
+        # We need to ensure all comparisons are using the same data type
         mask = (data_copy.index >= start_ts) & (data_copy.index <= end_ts)
-        period_data = data_copy.loc[mask].copy()
+        
+        # Handle the case if mask creation fails due to type mismatch
+        if not isinstance(mask, pd.Series):
+            # Alternative approach that's more explicit about types
+            mask = [(idx >= start_ts) and (idx <= end_ts) for idx in data_copy.index]
+            
+        period_data = data_copy.loc[mask].copy() if isinstance(mask, pd.Series) else data_copy.loc[mask].copy()
     except Exception as e:
         # Handle any errors in date processing
         print(f"Error processing dates in technical indicator chart: {e}")
