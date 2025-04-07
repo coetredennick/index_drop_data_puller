@@ -307,6 +307,139 @@ def show_ml_predictions():
             </div>
             """, unsafe_allow_html=True)
     
+    # Display ML prediction for current market
+    if model_result is not None and model_result.get('success', False):
+        st.markdown("#### Current Market Prediction")
+        
+        # Get features for prediction
+        _, features = prepare_features(
+            st.session_state.data,
+            focus_on_drops=True, 
+            drop_threshold=-abs(st.session_state.drop_threshold)
+        )
+        
+        # Get most recent data for prediction
+        recent_data = st.session_state.data.tail(30)  # Use last 30 days of data for better feature calculation
+        
+        # Make prediction with enhanced function that returns a dictionary
+        prediction_result = predict_returns(model_result, recent_data, features)
+        
+        if prediction_result.get('success', False):
+            # Extract key prediction information
+            prediction = prediction_result.get('predicted_return')
+            prediction_date = prediction_result.get('prediction_date')
+            confidence_interval = prediction_result.get('confidence_interval_95', {})
+            lower_bound = confidence_interval.get('lower')
+            upper_bound = confidence_interval.get('upper')
+            
+            # Get feature contributions if available
+            feature_contributions = prediction_result.get('feature_contributions', {})
+            top_features = []
+            
+            if feature_contributions:
+                # Sort features by absolute contribution and get top 3
+                sorted_features = sorted(
+                    feature_contributions.items(), 
+                    key=lambda x: abs(x[1].get('scaled_contribution', 0)), 
+                    reverse=True
+                )[:3]
+                
+                for feat_name, feat_data in sorted_features:
+                    contribution = feat_data.get('scaled_contribution', 0)
+                    # Format feature name for display
+                    display_name = feat_name.replace('_', ' ').title()
+                    if "Vix" in display_name:
+                        display_name = display_name.replace("Vix", "VIX")
+                    if "Rsi" in display_name:
+                        display_name = display_name.replace("Rsi", "RSI")
+                    if "Macd" in display_name:
+                        display_name = display_name.replace("Macd", "MACD")
+                    
+                    # Prepare contribution display with appropriate color
+                    contrib_color = "green" if contribution > 0 else "red"
+                    contrib_sign = "+" if contribution > 0 else ""
+                    
+                    top_features.append({
+                        "name": display_name,
+                        "contribution": contribution,
+                        "color": contrib_color,
+                        "display": f"{contrib_sign}{contribution:.2f}%"
+                    })
+            
+            # Color coding based on prediction value
+            color = "green" if prediction > 0 else "red"
+            
+            # Display prediction result in an enhanced card
+            st.markdown(f"""
+            <div style="padding: 20px; border-radius: 8px; background-color: white; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h3 style="margin: 0 0 10px 0; font-size: 1.2rem; color: #1E4A7B;">Predicted {target_period} Return</h3>
+                        <p style="font-size: 2.4rem; font-weight: 700; margin: 0; color: {color};">{prediction:.2f}%</p>
+                        <p style="font-size: 1rem; margin: 5px 0 0 0; color: #6c757d;">
+                            Range: <span style="color: #555; font-weight: 500;">{lower_bound:.2f}% to {upper_bound:.2f}%</span>
+                        </p>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; min-width: 180px;">
+                        <p style="font-size: 0.9rem; margin: 0 0 5px 0; color: #555; font-weight: 500;">Confidence: 95%</p>
+                        <div style="height: 6px; background-color: #e9ecef; border-radius: 3px; margin-bottom: 10px;">
+                            <div style="height: 100%; width: 95%; background-color: #4CAF50; border-radius: 3px;"></div>
+                        </div>
+                        <p style="font-size: 0.8rem; margin: 0; color: #6c757d;">Based on model accuracy</p>
+                    </div>
+                </div>
+                
+                <p style="font-size: 0.9rem; margin: 15px 0 15px 0; color: #666;">
+                    Based on current market conditions analyzed on {prediction_date.strftime('%b %d, %Y') if isinstance(prediction_date, pd.Timestamp) else 'recent data'}, 
+                    the model predicts this return for the S&P 500 over the next {target_period_days.get(target_period, 21)} trading days.
+                </p>
+                
+                <div style="margin-top: 15px; background-color: #f9f9f9; padding: 12px; border-radius: 5px; border-left: 3px solid #1E88E5;">
+                    <p style="font-size: 0.9rem; margin: 0 0 8px 0; color: #1E4A7B; font-weight: 500;">Top Contributing Factors:</p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+            """, unsafe_allow_html=True)
+            
+            # Display top contributing features
+            for feature in top_features:
+                st.markdown(f"""
+                    <div style="background-color: white; border-radius: 4px; padding: 8px; flex: 1; min-width: 120px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <span style="font-size: 0.85rem; color: #555;">{feature['name']}</span>
+                        <p style="font-size: 1rem; font-weight: 600; margin: 5px 0 0 0; color: {feature['color']};">{feature['display']}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Close the container divs
+            st.markdown("</div></div></div>", unsafe_allow_html=True)
+            
+            # Add explanation of the confidence interval
+            st.markdown(f"""
+            <div style="margin: 10px 0 20px 0; padding: 10px; background-color: rgba(240, 248, 255, 0.5); border-radius: 5px; font-size: 0.85rem; color: #555;">
+                <strong>Understanding the prediction:</strong> The model predicts a {prediction:.2f}% return over the next {target_period_days.get(target_period, 21)} trading days, 
+                with a 95% confidence interval of {lower_bound:.2f}% to {upper_bound:.2f}%. 
+                This prediction considers current market conditions, technical indicators, VIX data, and trading volumes.
+            </div>
+            """, unsafe_allow_html=True)
+            
+        else:
+            # Display error information if prediction failed
+            error_message = prediction_result.get('error', 'Unknown error in prediction')
+            
+            st.warning(f"Unable to make prediction with current market data: {error_message}")
+            
+            # Show more detailed error information with technical details in expandable section
+            with st.expander("Prediction Error Details"):
+                missing_features = prediction_result.get('missing_features', [])
+                if missing_features:
+                    st.write("##### Missing Features:")
+                    st.write(", ".join(missing_features[:10]) + ("..." if len(missing_features) > 10 else ""))
+                
+                if 'traceback' in prediction_result:
+                    st.code(prediction_result['traceback'], language="python")
+            
+        # Add prediction analysis chart
+        prediction_chart = create_prediction_chart(model_result, height=400)
+        st.plotly_chart(prediction_chart, use_container_width=True)
+    
     # Model performance metrics - only shown if a model is available
     if model_result is not None and model_result.get('success', False):
         st.markdown("#### Model Performance")
