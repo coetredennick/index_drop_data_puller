@@ -413,6 +413,67 @@ def show_drop_events():
                         delta_color="inverse"
                     )
         
+        # Add rate of decline metrics section
+        st.markdown("### Decline Rate Analysis")
+            
+        # Rate metrics from the event window itself
+        st.markdown("#### Event Window Metrics")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Rate of Decline", f"{selected_event.get('decline_rate_per_day', 0):.2f}%/day")
+        with col2:
+            st.metric("Duration", f"{selected_event.get('decline_duration', 1)} day{'s' if selected_event.get('decline_duration', 1) > 1 else ''}")
+        with col3:
+            if selected_event['type'] == 'consecutive':
+                st.metric("Cumulative Drop", f"{selected_event.get('cumulative_drop', 0):.2f}%")
+            else:
+                st.metric("Single Day Drop", f"{selected_event.get('drop_pct', 0):.2f}%")
+        
+        # Drawdown from peak metrics
+        st.markdown("#### Drawdown from Market Peak")
+        
+        # Get peak date
+        peak_date = selected_event.get('peak_date')
+        if peak_date and hasattr(peak_date, 'strftime'):
+            peak_date_str = peak_date.strftime('%Y-%m-%d')
+        else:
+            peak_date_str = str(peak_date) if peak_date else "N/A"
+            
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Peak Date", peak_date_str)
+        with col2:
+            st.metric("Drop from Peak", f"{selected_event.get('drawdown_from_peak_pct', 0):.2f}%")
+        with col3:
+            st.metric("Days from Peak", f"{selected_event.get('days_from_peak', selected_event.get('days_since_peak', 1))}")
+            
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Peak to End Decline Rate", 
+                     f"{selected_event.get('peak_to_end_rate', selected_event.get('decline_rate_per_day', 0)):.2f}%/day")
+        with col2:
+            drawdown_pct = selected_event.get('drawdown_from_peak_pct', 0)
+            event_drop = selected_event.get('drop_pct' if selected_event['type'] == 'single_day' else 'cumulative_drop', 0)
+            # Calculate how much of the total drawdown occurred during this event
+            if drawdown_pct != 0:
+                pct_of_drawdown = (abs(event_drop) / abs(drawdown_pct)) * 100
+                st.metric("% of Total Drawdown", f"{pct_of_drawdown:.1f}%")
+            else:
+                st.metric("% of Total Drawdown", "100.0%")
+            
+        # For consecutive drops, add additional metrics
+        if selected_event['type'] == 'consecutive':
+            st.markdown("#### Detailed Decline Characteristics")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Max Daily Decline", f"{selected_event.get('max_daily_decline', 0):.2f}%")
+            with col2:
+                # Format acceleration with sign (positive means accelerating drop)
+                acceleration = selected_event.get('decline_acceleration', 0)
+                st.metric("Acceleration", f"{acceleration:+.2f}%", 
+                          delta="-" if acceleration > 0 else "+", 
+                          delta_color="inverse")  # Inverse because for drops, acceleration is bad
+        
         # Show recovery chart
         st.markdown("### Recovery Performance")
         

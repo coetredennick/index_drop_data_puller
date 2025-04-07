@@ -335,9 +335,14 @@ def show_historical_performance():
             # For single day events, just show the drop percentage
             daily_drop_str = f"{event['drop_pct']:.2f}%"
             
-        # Calculate rate of decline metrics
-        decline_rate = event.get('decline_rate_per_day', 0)
+        # Get rate of decline metrics - now including drawdown from peak
+        decline_rate = event.get('decline_rate_per_day', 0)  # Rate within the window/day
         decline_duration = event.get('decline_duration', 1)  # 1-day minimum
+        
+        # Get peak-based metrics
+        peak_to_end_rate = event.get('peak_to_end_rate', decline_rate)
+        drawdown_from_peak = event.get('drawdown_from_peak_pct', event.get('drop_pct', 0))
+        days_from_peak = event.get('days_since_peak', decline_duration)
         
         # For consecutive drops, add information about acceleration
         if event['type'] == 'consecutive':
@@ -346,10 +351,20 @@ def show_historical_performance():
             # Format acceleration with sign
             acceleration_str = f"{decline_acceleration:+.2f}%" if abs(decline_acceleration) > 0.01 else "0.00%"
             
-            decline_metrics = f"{decline_rate:.2f}%/day | Duration: {decline_duration}d | Max: {max_daily_decline:.2f}% | Accel: {acceleration_str}"
+            # Show both the window metrics and the drawdown from peak metrics
+            window_metrics = f"Window: {decline_rate:.2f}%/day over {decline_duration}d"
+            peak_metrics = f"From Peak: {peak_to_end_rate:.2f}%/day over {days_from_peak}d"
+            detail_metrics = f"Max: {max_daily_decline:.2f}% | Accel: {acceleration_str}"
+            
+            decline_metrics = f"{window_metrics} | {peak_metrics} | {detail_metrics}"
         else:
-            # For single day drops, just show the rate (which is the same as the drop value)
-            decline_metrics = f"{decline_rate:.2f}%/day | Duration: 1d"
+            # For single day drops, check if the drawdown from peak is significantly different
+            if abs(drawdown_from_peak - event.get('drop_pct', 0)) > 0.5 and days_from_peak > 1:
+                # Show both single day and drawdown from peak metrics
+                decline_metrics = f"Daily: {decline_rate:.2f}%/day | From Peak: {peak_to_end_rate:.2f}%/day over {days_from_peak}d"
+            else:
+                # Just show the single-day metrics
+                decline_metrics = f"{decline_rate:.2f}%/day | Duration: 1d"
             
         row = {
             'Date': date_str,

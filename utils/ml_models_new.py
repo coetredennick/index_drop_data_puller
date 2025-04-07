@@ -103,13 +103,50 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         # Volume weighted average price (VWAP)-based feature
         df['VWAP_Ratio'] = df['Close'] / ((df['High'] + df['Low'] + df['Close']) / 3 * df['Volume']).cumsum() / df['Volume'].cumsum()
     
-    # Calculate rate of decline metrics for ML models
-    if 'Return' in df.columns:
+    # Calculate rate of decline metrics for ML models including drawdown from peak metrics
+    if 'Return' in df.columns and 'Close' in df.columns:
         # Initialize decline rate columns with NaN
         df['Decline_Duration'] = 1  # Default is 1 day
         df['Decline_Rate_Per_Day'] = df['Return'].abs()  # For single day, rate = magnitude of return
         df['Max_Daily_Decline'] = df['Return'].abs()  # For single day, max = magnitude of return
         df['Decline_Acceleration'] = 0  # For single day, acceleration is 0
+        
+        # Calculate drawdown from local peak (same method as event_detection.py)
+        # Calculate running max price (to identify the peak before each drop)
+        df['Running_Max_Close'] = df['Close'].expanding().max()
+        
+        # Calculate drawdown from peak (as percentage)
+        df['Drawdown_From_Peak_Pct'] = (df['Close'] / df['Running_Max_Close'] - 1) * 100
+        
+        # Identify peaks (where Close == Running_Max_Close)
+        df['Is_Peak'] = df['Close'] == df['Running_Max_Close']
+        
+        # Calculate days since peak
+        df['Days_Since_Peak'] = 0
+        
+        # Create temporary column to track peak dates
+        df['Peak_Date'] = None
+        
+        # Fill in peak dates and days since peak
+        curr_peak_idx = 0
+        days_since_peak = 0
+        
+        for i in range(len(df)):
+            if df['Is_Peak'].iloc[i]:
+                curr_peak_idx = i
+                days_since_peak = 0
+            else:
+                days_since_peak += 1
+            
+            df.iloc[i, df.columns.get_loc('Days_Since_Peak')] = days_since_peak
+        
+        # Calculate the rate of decline from peak
+        # (drawdown percentage divided by days since peak)
+        df['Peak_To_End_Rate'] = df['Drawdown_From_Peak_Pct'].abs() / df['Days_Since_Peak'].replace(0, 1)
+        
+        # Calculate how much of the drawdown this event represents 
+        # (single day drop as percentage of total drawdown from peak)
+        df['Pct_Of_Drawdown'] = (df['Return'].abs() / df['Drawdown_From_Peak_Pct'].abs() * 100).replace(np.inf, 100).replace(np.nan, 100)
         
         # Add rolling metrics that could identify consecutive declines
         # Rolling sum of negative returns (across last 5 and 10 trading days)
@@ -188,7 +225,13 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         'Rolling_5d_Neg_Days',     # Number of negative days in last 5 days
         'Avg_Decline_Rate_5d',     # Average rate of decline over 5 days
         'Decline_Volatility_5d',   # Volatility of declines over 5 days
-        'Accelerating_Decline'     # Binary flag for accelerating decline pattern
+        'Accelerating_Decline',    # Binary flag for accelerating decline pattern
+        
+        # Drawdown-based metrics (new)
+        'Drawdown_From_Peak_Pct',  # Percentage drawdown from recent peak
+        'Days_Since_Peak',         # Number of days since the most recent peak
+        'Peak_To_End_Rate',        # Rate of decline from peak to current point
+        'Pct_Of_Drawdown'          # Current event as % of total drawdown
     ]
     
     # Only include columns that actually exist in the data
