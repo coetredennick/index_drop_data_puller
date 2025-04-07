@@ -150,16 +150,20 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         
         # Add rolling metrics that could identify consecutive declines
         # Rolling sum of negative returns (across last 5 and 10 trading days)
+        # Fix: Use raw=False to ensure Series is passed to apply function
         df['Rolling_5d_Neg_Returns'] = df['Return'].rolling(5).apply(
-            lambda x: sum([r for r in x if r < 0])
+            lambda x: sum([r for r in x if r < 0]),
+            raw=False
         )
         df['Rolling_10d_Neg_Returns'] = df['Return'].rolling(10).apply(
-            lambda x: sum([r for r in x if r < 0])
+            lambda x: sum([r for r in x if r < 0]),
+            raw=False
         )
         
         # Count of negative return days in rolling window
         df['Rolling_5d_Neg_Days'] = df['Return'].rolling(5).apply(
-            lambda x: sum([1 for r in x if r < 0])
+            lambda x: sum([1 for r in x if r < 0]),
+            raw=False
         )
         
         # Calculate average rate of decline over recent periods
@@ -167,14 +171,37 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         
         # Volatility of declines
         df['Decline_Volatility_5d'] = df['Return'].rolling(5).apply(
-            lambda x: np.std([r for r in x if r < 0]) if any(r < 0 for r in x) else np.nan
+            lambda x: np.std([r for r in x if r < 0]) if any(r < 0 for r in x) else np.nan,
+            raw=False
         )
         
         # Calculate if we're in an accelerating decline pattern
         # (where recent drops are getting bigger each day)
+        # Simplify to avoid syntax issues - use a function instead of complex lambda
+        def check_accelerating_decline(window):
+            if len(window) != 3:
+                return 0
+                
+            # Make sure all values are negative
+            if not all(i < 0 for i in window):
+                return 0
+                
+            # Check if the decline is accelerating (absolute values getting larger)
+            if hasattr(window, 'iloc'):
+                # It's a pandas Series
+                if abs(window.iloc[0]) < abs(window.iloc[1]) < abs(window.iloc[2]):
+                    return 1
+            else:
+                # It's a numpy array
+                if abs(window[0]) < abs(window[1]) < abs(window[2]):
+                    return 1
+            
+            return 0
+            
+        # Apply the function to the rolling window
         df['Accelerating_Decline'] = df['Return'].rolling(3).apply(
-            lambda x: 1 if len(x) == 3 and x[0] < 0 and x[1] < 0 and x[2] < 0 and 
-                         abs(x[0]) < abs(x[1]) < abs(x[2]) else 0
+            check_accelerating_decline,
+            raw=False  # Use pandas Series in window calculations instead of raw arrays
         )
     
     # Select features that might be useful for prediction
