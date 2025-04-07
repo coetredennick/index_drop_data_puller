@@ -65,13 +65,40 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         if indicator in df.columns:
             features.append(indicator)
     
-    # Add Volume Ratio if available or calculate it
-    if 'Volume_Ratio' in df.columns:
-        features.append('Volume_Ratio')
-    elif 'Volume' in df.columns and 'Avg_Vol_50' in df.columns:
-        # Calculate volume ratio if not already present
-        df['Volume_Ratio'] = df['Volume'] / df['Avg_Vol_50']
-        features.append('Volume_Ratio')
+    # Add comprehensive volume features
+    if 'Volume' in df.columns:
+        # Add raw volume data as a feature
+        features.append('Volume')
+        
+        # Calculate volume moving averages if not already present
+        if 'Avg_Vol_10' not in df.columns:
+            df['Avg_Vol_10'] = df['Volume'].rolling(window=10).mean()
+        if 'Avg_Vol_20' not in df.columns:
+            df['Avg_Vol_20'] = df['Volume'].rolling(window=20).mean()
+        if 'Avg_Vol_50' not in df.columns:
+            df['Avg_Vol_50'] = df['Volume'].rolling(window=50).mean()
+            
+        # Add volume ratios
+        df['Volume_Ratio_10d'] = df['Volume'] / df['Avg_Vol_10']
+        df['Volume_Ratio_20d'] = df['Volume'] / df['Avg_Vol_20']
+        df['Volume_Ratio_50d'] = df['Volume'] / df['Avg_Vol_50']
+        features.extend(['Volume_Ratio_10d', 'Volume_Ratio_20d', 'Volume_Ratio_50d'])
+        
+        # Add volume rate of change
+        df['Volume_ROC_5d'] = df['Volume'].pct_change(periods=5) * 100
+        features.append('Volume_ROC_5d')
+        
+        # Add volume trend features (compare averages)
+        df['Vol_10_50_Ratio'] = df['Avg_Vol_10'] / df['Avg_Vol_50']
+        features.append('Vol_10_50_Ratio')
+        
+        # Add price-volume correlation features
+        df['Price_Volume_Correlation'] = df['Return'].rolling(10).corr(df['Volume'].pct_change())
+        features.append('Price_Volume_Correlation')
+        
+        # Add volume momentum indicators
+        df['Volume_Momentum'] = df['Volume'] - df['Volume'].shift(10)
+        features.append('Volume_Momentum')
     
     # Add price-based features and ratios
     if 'SMA_50' in df.columns and 'SMA_200' in df.columns:
