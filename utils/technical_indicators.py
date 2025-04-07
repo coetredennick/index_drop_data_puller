@@ -128,8 +128,14 @@ def calculate_technical_indicators(data):
     # Calculate drawdown from peak
     df['Drawdown_From_Peak_Pct'] = (df['Close'] / df['Running_Max'] - 1) * 100
     
-    # Calculate days since peak
-    df['Days_Since_Peak'] = (df['Close'] != df['Running_Max']).cumsum() - (df['Close'] != df['Running_Max']).cumulative_min()
+    # Calculate days since peak (alternate approach since cumulative_min() is not available)
+    not_at_peak = (df['Close'] != df['Running_Max']).astype(int)
+    # Reset counter when we hit a new peak
+    reset_points = (not_at_peak.diff() < 0).fillna(0).astype(int)
+    # Calculate group ID for each peak-to-trough sequence
+    group_id = reset_points.cumsum()
+    # Count days within each group
+    df['Days_Since_Peak'] = not_at_peak.groupby(group_id).cumsum()
     
     # Calculate rate of decline from peak
     df['Peak_To_End_Rate'] = df['Drawdown_From_Peak_Pct'] / df['Days_Since_Peak'].replace(0, 1)
