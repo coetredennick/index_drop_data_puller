@@ -1275,6 +1275,14 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
         # Get RMSE from model metrics, but limit it to realistic values
         rmse = min(8.0, max(1.0, model_1y['metrics'].get('rmse_test', 2.5)))
         
+        # Calculate more realistic bounds for percent change
+        # Even in extreme cases, we don't expect >100% or <-50% in a year
+        max_annual_percent_change = 45.0  # Maximum realistic annual % change
+        min_annual_percent_change = -35.0  # Minimum realistic annual % change
+        
+        # Cap the annual return prediction to reasonable limits
+        annual_return_prediction = max(min_annual_percent_change, min(max_annual_percent_change, annual_return_prediction))
+        
         # Calculate scenario lines for all periods
         scenario_lines = {}
         
@@ -1284,16 +1292,60 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
             forecast_prices = [last_price]
             
             # Adjust daily return for this scenario
-            scenario_adjustment = z_score * (rmse / np.sqrt(252))  # Scale RMSE to daily
-            scenario_daily_return = daily_return + scenario_adjustment
+            # Scale RMSE based on forecast horizon, with diminishing effect for longer horizons
+            scaled_rmse = rmse / (np.sqrt(252) * (1 + 0.1 * np.log(days_to_forecast / 21)))
+            scenario_adjustment = z_score * scaled_rmse  
+            base_daily_return = ((1 + annual_return_prediction/100) ** (1/252) - 1) * 100
+            scenario_daily_return = base_daily_return + scenario_adjustment
             
-            # Generate price series
+            # Apply stronger constraints on daily returns to prevent unrealistic forecasts
+            # Max/min reasonable daily returns (±0.5% base with adjustment for volatility)
+            max_daily_return = 0.5 + (0.1 * scaled_rmse)  # Higher volatility allows higher daily moves
+            min_daily_return = -0.5 - (0.1 * scaled_rmse)
+            
+            # Constrain the scenario return
+            scenario_daily_return = max(min_daily_return, min(max_daily_return, scenario_daily_return))
+            
+            # Generate price series with a mean-reversion component for more realistic paths
+            prev_adjustment = 0
             for i in range(days_to_forecast):
-                next_price = forecast_prices[-1] * (1 + scenario_daily_return/100)
+                # Add slight mean reversion (reduces extreme forecasts)
+                if i > 0:
+                    # If we've moved too far from the starting price, pull back slightly
+                    price_change_pct = (forecast_prices[-1] / last_price - 1) * 100
+                    # Mean reversion factor - stronger for extreme moves
+                    reversion = -0.005 * price_change_pct * (abs(price_change_pct) / 10)
+                    # Limit the reversion effect
+                    reversion = max(-0.2, min(0.2, reversion))
+                else:
+                    reversion = 0
+                
+                # Apply the daily return with reversion effect
+                adjusted_return = scenario_daily_return + reversion
+                next_price = forecast_prices[-1] * (1 + adjusted_return/100)
                 forecast_prices.append(next_price)
             
             # Remove first price (which is the actual last price)
             scenario_lines[scenario_name] = forecast_prices[1:]
+            
+            # Safety check - make sure no forecast exceeds 3x or -80% of the current price
+            max_multiplier = 3.0
+            min_multiplier = 0.2  # 80% loss
+            if any(price > last_price * max_multiplier for price in scenario_lines[scenario_name]):
+                # Cap the forecast prices if they exceed the limit
+                scenario_lines[scenario_name] = [
+                    min(price, last_price * max_multiplier) 
+                    for price in scenario_lines[scenario_name]
+                ]
+                print(f"Warning: Capped {scenario_name} forecast prices that exceeded {max_multiplier}x the current price")
+                
+            if any(price < last_price * min_multiplier for price in scenario_lines[scenario_name]):
+                # Floor the forecast prices if they fall below the limit
+                scenario_lines[scenario_name] = [
+                    max(price, last_price * min_multiplier) 
+                    for price in scenario_lines[scenario_name]
+                ]
+                print(f"Warning: Capped {scenario_name} forecast prices that fell below {min_multiplier}x the current price")
 
         # Add YTD historical data for context
         fig.add_trace(

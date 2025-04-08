@@ -331,10 +331,51 @@ def show_ml_predictions():
                 fig.update_layout(xaxis_title="Date", yaxis_title="Price ($)")
                 st.plotly_chart(fig, use_container_width=True)
             
-    # Get the appropriate model from session state for individual predictions
-    # Define model_result before using it
+    # Ensure we have a trained model - auto train if needed
     target_period = st.session_state.get("target_period", "1M")
     model_result = st.session_state.ml_models.get(target_period)
+    
+    # If no model is trained yet, auto-train one with default parameters
+    if model_result is None or not model_result.get('success', False):
+        try:
+            with st.spinner(f"Auto-training {target_period} prediction model..."):
+                st.session_state.drop_threshold = -3.0  # Default drop threshold
+                st.session_state.model_type = "random_forest"  # Default model type
+                st.session_state.focus_on_drops = True  # Default to focus on drops
+                st.session_state.test_size = 0.2  # Default test size
+                
+                # Get features with current settings
+                data_with_features, features = prepare_features(
+                    st.session_state.data,
+                    focus_on_drops=st.session_state.focus_on_drops,
+                    drop_threshold=-abs(st.session_state.drop_threshold)
+                )
+                
+                # Get the appropriate forward return column based on the target period
+                target_periods = {"1W": "Fwd_Ret_1W", "1M": "Fwd_Ret_1M", "3M": "Fwd_Ret_3M", "1Y": "Fwd_Ret_1Y"}
+                target_column = target_periods.get(target_period, "Fwd_Ret_1M")
+                
+                # Train the model
+                model_result = train_model(
+                    data_with_features,
+                    features,
+                    target_column,
+                    model_type=st.session_state.model_type,
+                    test_size=st.session_state.test_size
+                )
+                
+                # Save the model to session state
+                if model_result and model_result.get('success', False):
+                    if 'ml_models' not in st.session_state:
+                        st.session_state.ml_models = {}
+                    st.session_state.ml_models[target_period] = model_result
+                    print(f"Auto-trained {target_period} model successfully")
+                else:
+                    print(f"Failed to auto-train {target_period} model: {model_result.get('error', 'Unknown error')}")
+        except Exception as e:
+            import traceback
+            print(f"Error auto-training model: {str(e)}")
+            print(traceback.format_exc())
     
     # Technical indicators for current market conditions
     st.markdown("#### Key Technical Indicators")
