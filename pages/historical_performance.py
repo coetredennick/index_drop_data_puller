@@ -366,13 +366,38 @@ def show_historical_performance():
                 # Just show the single-day metrics
                 decline_metrics = f"{decline_rate:.2f}%/day | Duration: 1d"
             
+        # Get technical indicator data from the event date
+        event_date = event['date']
+        vix_value = None
+        volume_value = None
+        rsi_value = None
+        
+        # Try to get the VIX, Volume and RSI values for this date
+        try:
+            if event_date in st.session_state.data.index:
+                row_data = st.session_state.data.loc[event_date]
+                vix_value = row_data.get('VIX_Close', None)
+                volume_value = row_data.get('Volume', None)
+                rsi_value = row_data.get('RSI_14', None)
+        except Exception as e:
+            # If data isn't available, just leave as None
+            pass
+            
+        # Format technical indicators
+        vix_str = f"{vix_value:.2f}" if vix_value is not None and not pd.isna(vix_value) else "N/A"
+        volume_str = f"{volume_value:,.0f}" if volume_value is not None and not pd.isna(volume_value) else "N/A"
+        rsi_str = f"{rsi_value:.1f}" if rsi_value is not None and not pd.isna(rsi_value) else "N/A"
+            
         row = {
             'Date': date_str,
             'Type': 'Single Day' if event['type'] == 'single_day' else f'Consecutive ({event["num_days"]} days)',
             'Drop (%)': event['drop_pct'] if event['type'] == 'single_day' else event['cumulative_drop'],
             'Daily Drops': daily_drop_str,
             'Severity': event['severity'],
-            'Rate of Decline': decline_metrics,  # Add rate of decline metrics
+            'Decline Rate': decline_metrics.replace('From Peak: ', '').replace('Daily: ', '').replace('Window: ', ''),  # Shortened format
+            'VIX': vix_str,
+            'Volume': volume_str,
+            'RSI': rsi_str,
             '1W (%)': event.get('fwd_return_1w', None),
             '1M (%)': event.get('fwd_return_1m', None),
             '3M (%)': event.get('fwd_return_3m', None),
@@ -403,16 +428,33 @@ def show_historical_performance():
         # Add the Daily Drops column for the TOTALS row (leaving it empty since it can't be meaningfully aggregated)
         totals_row['Daily Drops'] = 'N/A'
         
-        # Add the Rate of Decline column for the TOTALS row
+        # Add VIX, Volume, and RSI averages to the totals row
+        try:
+            # Calculate averages of available technical indicators
+            vix_avg = events_df[events_df['VIX'].apply(lambda x: x != 'N/A')]['VIX'].apply(lambda x: float(x)).mean()
+            volume_avg = events_df[events_df['Volume'].apply(lambda x: x != 'N/A')]['Volume'].apply(lambda x: float(x.replace(',', ''))).mean()
+            rsi_avg = events_df[events_df['RSI'].apply(lambda x: x != 'N/A')]['RSI'].apply(lambda x: float(x)).mean()
+            
+            # Format them
+            totals_row['VIX'] = f"{vix_avg:.2f}" if not pd.isna(vix_avg) else "N/A"
+            totals_row['Volume'] = f"{volume_avg:,.0f}" if not pd.isna(volume_avg) else "N/A"
+            totals_row['RSI'] = f"{rsi_avg:.1f}" if not pd.isna(rsi_avg) else "N/A"
+        except Exception as e:
+            # If there's any error in calculating, use N/A
+            totals_row['VIX'] = "N/A"
+            totals_row['Volume'] = "N/A"
+            totals_row['RSI'] = "N/A"
+        
+        # Add the Decline Rate column for the TOTALS row
         # Calculate average rate and duration across all events
-        avg_rate = events_df[events_df['Rate of Decline'].notna()]['Drop (%)'].abs().mean() / events_df[events_df['Rate of Decline'].notna()]['Type'].apply(
+        avg_rate = events_df[events_df['Decline Rate'].notna()]['Drop (%)'].abs().mean() / events_df[events_df['Decline Rate'].notna()]['Type'].apply(
             lambda x: int(x.split('(')[1].split(' ')[0]) if 'Consecutive' in x else 1
         ).mean()
-        avg_duration = events_df[events_df['Rate of Decline'].notna()]['Type'].apply(
+        avg_duration = events_df[events_df['Decline Rate'].notna()]['Type'].apply(
             lambda x: int(x.split('(')[1].split(' ')[0]) if 'Consecutive' in x else 1
         ).mean()
         
-        totals_row['Rate of Decline'] = f"Avg: {avg_rate:.2f}%/day | Avg Duration: {avg_duration:.1f}d"
+        totals_row['Decline Rate'] = f"Avg: {avg_rate:.2f}%/d"
         
         # Add totals for each return period
         for col in ['1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)', 'Total Avg (%)']:
