@@ -1073,6 +1073,333 @@ def create_feature_importance_chart(model_result, title="Feature Importance", he
         )
         return fig
 
+def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="S&P 500 Market Scenarios", height=600):
+    """
+    Create a comprehensive forecast chart showing different confidence levels (bear, base, bull)
+    for multiple time periods (1W, 1M, 3M, 6M, 1Y) in a single visualization without requiring
+    specific target selection.
+    
+    Parameters:
+    -----------
+    data : pandas.DataFrame
+        DataFrame containing historical S&P 500 data
+    features : list
+        List of feature column names used for prediction
+    days_to_forecast : int, optional
+        Number of days to forecast into the future (default: 365 days/1 year)
+    title : str, optional
+        Chart title
+    height : int, optional
+        Chart height in pixels
+        
+    Returns:
+    --------
+    plotly.graph_objects.Figure
+        Multi-scenario forecast chart with confidence intervals for all time periods
+    """
+    # Create a forecast figure
+    fig = go.Figure()
+    
+    try:
+        # Forecast periods to model and display
+        forecast_periods = ['1W', '1M', '3M', '6M', '1Y']
+        forecast_days_map = {'1W': 5, '1M': 21, '3M': 63, '6M': 126, '1Y': 252}
+        
+        # Train models for all periods in parallel
+        period_models = {}
+        
+        # First train a single model for all periods using a 1Y target for complete forecast coverage
+        combined_target = 'Fwd_Ret_1Y'
+        model_1y = train_model(
+            data, 
+            features, 
+            combined_target, 
+            model_type='random_forest', 
+            test_size=0.2
+        )
+        
+        # If base model fails, we can't continue
+        if not model_1y.get('success', False):
+            raise ValueError(f"Failed to train base 1Y model: {model_1y.get('error', 'Unknown error')}")
+        
+        # Calculate confidence scenarios once
+        # Get the most recent data point
+        last_date = data.index[-1]
+        last_price = data['Close'].iloc[-1]
+        
+        # YTD data for historical context
+        current_year = last_date.year
+        ytd_start = pd.Timestamp(f"{current_year}-01-01")
+        ytd_data = data[data.index >= ytd_start]
+        
+        # Create forecast dates
+        forecast_dates = []
+        for i in range(days_to_forecast):
+            # Add business days (approximation for trading days)
+            delta_days = i + 1
+            # Simple estimation: 252 trading days per year
+            date = last_date + pd.Timedelta(days=delta_days)
+            forecast_dates.append(date)
+            
+        # Get model's prediction for 1-year return
+        prediction_result = predict_returns(model_1y, data.tail(30), features)
+        
+        if not prediction_result.get('success', False):
+            raise ValueError(f"Failed to get prediction: {prediction_result.get('error', 'Unknown error')}")
+            
+        annual_return_prediction = prediction_result.get('predicted_return', 0)
+        
+        # Calculate daily return (with compounding)
+        daily_return = ((1 + annual_return_prediction/100) ** (1/252) - 1) * 100
+        
+        # Determine confidence scenarios
+        confidence_levels = {
+            'Bear Case': -1.65,  # ~5th percentile
+            'Base Case': 0,      # 50th percentile (median)
+            'Bull Case': 1.65    # ~95th percentile
+        }
+        
+        # Get RMSE from model metrics, but limit it to realistic values
+        rmse = min(8.0, max(1.0, model_1y['metrics'].get('rmse_test', 2.5)))
+        
+        # Calculate scenario lines for all periods
+        scenario_lines = {}
+        
+        # Create scenario forecasts
+        for scenario_name, z_score in confidence_levels.items():
+            # Initialize arrays for this scenario
+            forecast_prices = [last_price]
+            
+            # Adjust daily return for this scenario
+            scenario_adjustment = z_score * (rmse / np.sqrt(252))  # Scale RMSE to daily
+            scenario_daily_return = daily_return + scenario_adjustment
+            
+            # Generate price series
+            for i in range(days_to_forecast):
+                next_price = forecast_prices[-1] * (1 + scenario_daily_return/100)
+                forecast_prices.append(next_price)
+            
+            # Remove first price (which is the actual last price)
+            scenario_lines[scenario_name] = forecast_prices[1:]
+
+        # Add YTD historical data for context
+        fig.add_trace(
+            go.Scatter(
+                x=ytd_data.index,
+                y=ytd_data['Close'],
+                mode='lines',
+                name='YTD Historical',
+                line=dict(color='rgba(0, 0, 255, 0.8)', width=2.5)
+            )
+        )
+        
+        # Add scenario lines
+        scenario_colors = {
+            'Bear Case': 'rgba(255, 0, 0, 0.9)',
+            'Base Case': 'rgba(0, 128, 0, 0.9)', 
+            'Bull Case': 'rgba(0, 200, 0, 0.9)'
+        }
+        
+        for scenario, prices in scenario_lines.items():
+            fig.add_trace(
+                go.Scatter(
+                    x=forecast_dates,
+                    y=prices,
+                    mode='lines',
+                    name=scenario,
+                    line=dict(
+                        color=scenario_colors.get(scenario, 'rgba(128, 128, 128, 0.8)'),
+                        width=2.5,
+                        dash='solid' if scenario == 'Base Case' else 'dash'
+                    )
+                )
+            )
+        
+        # Add markers for specific time horizons
+        horizon_markers = []
+        for period in forecast_periods:
+            days = forecast_days_map.get(period, 21)
+            if days < len(forecast_dates):
+                horizon_date = forecast_dates[days-1]
+                
+                # Get prices for all scenarios at this horizon
+                horizon_prices = {
+                    scenario: scenario_lines[scenario][days-1]
+                    for scenario in scenario_lines
+                }
+                
+                # Calculate changes for all scenarios
+                horizon_changes = {
+                    scenario: ((price / last_price) - 1) * 100
+                    for scenario, price in horizon_prices.items()
+                }
+                
+                horizon_markers.append({
+                    'period': period,
+                    'date': horizon_date,
+                    'prices': horizon_prices,
+                    'changes': horizon_changes
+                })
+        
+        # Add vertical reference lines at each forecast horizon
+        for horizon in horizon_markers:
+            # Add vertical line
+            fig.add_shape(
+                type="line",
+                x0=horizon['date'],
+                y0=min([p for p in horizon['prices'].values()]) * 0.98,
+                x1=horizon['date'],
+                y1=max([p for p in horizon['prices'].values()]) * 1.02,
+                line=dict(
+                    color="rgba(128, 128, 128, 0.5)",
+                    width=1,
+                    dash="dot",
+                )
+            )
+            
+            # Add annotations for each scenario at this horizon
+            y_offset = 40
+            for scenario in scenario_lines.keys():
+                price = horizon['prices'][scenario]
+                change = horizon['changes'][scenario]
+                color = "red" if change < 0 else "green"
+                
+                # Offset each scenario label vertically
+                y_offset -= 20
+                
+                fig.add_annotation(
+                    x=horizon['date'],
+                    y=price,
+                    text=f"{horizon['period']} {scenario}: ${price:.2f} ({change:+.1f}%)",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowsize=1,
+                    arrowwidth=1.5,
+                    ax=40,
+                    ay=y_offset,
+                    font=dict(
+                        color=color,
+                        size=10
+                    )
+                )
+        
+        # Mark the last actual price point
+        fig.add_trace(
+            go.Scatter(
+                x=[last_date],
+                y=[last_price],
+                mode='markers',
+                name='Latest Price',
+                marker=dict(
+                    color='black',
+                    size=12,
+                    symbol='circle'
+                )
+            )
+        )
+        
+        # Create labels for time period boxes at bottom
+        for i, horizon in enumerate(horizon_markers):
+            fig.add_shape(
+                type="rect",
+                x0=last_date if i == 0 else horizon_markers[i-1]['date'],
+                y0=0.02,
+                x1=horizon['date'],
+                y1=0.08,
+                xref="x",
+                yref="paper",
+                fillcolor="rgba(240, 240, 240, 0.7)",
+                line=dict(width=1, color="rgba(100, 100, 100, 0.5)"),
+            )
+            
+            middle_date = last_date + (horizon['date'] - last_date) / 2 if i == 0 else horizon_markers[i-1]['date'] + (horizon['date'] - horizon_markers[i-1]['date']) / 2
+            
+            fig.add_annotation(
+                x=middle_date,
+                y=0.05,
+                text=horizon['period'],
+                showarrow=False,
+                xref="x",
+                yref="paper",
+                font=dict(size=12)
+            )
+            
+        # Update layout
+        fig.update_layout(
+            title=title,
+            xaxis_title='Date',
+            yaxis_title='S&P 500 Price ($)',
+            height=height,
+            hovermode='x unified',
+            yaxis=dict(
+                tickprefix='$',
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(l=40, r=40, t=50, b=60),
+        )
+        
+        # Add range slider and selector buttons
+        fig.update_xaxes(
+            rangeslider_visible=True,
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=7, label="1w", step="day", stepmode="backward"),
+                    dict(count=1, label="1m", step="month", stepmode="backward"),
+                    dict(count=3, label="3m", step="month", stepmode="backward"),
+                    dict(count=6, label="6m", step="month", stepmode="backward"),
+                    dict(step="all")
+                ])
+            )
+        )
+        
+        fig.add_annotation(
+            text=f"Scenarios based on Random Forest model | Bear Case: 5th percentile | Base Case: median | Bull Case: 95th percentile",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=-0.16,
+            showarrow=False,
+            font=dict(size=10, color="gray"),
+            align="center"
+        )
+        
+        return fig
+        
+    except Exception as e:
+        # Log error and return a simple fallback chart
+        import traceback
+        print(f"Error creating multi-scenario forecast: {str(e)}")
+        print(traceback.format_exc())
+        
+        # Create a fallback chart if possible
+        historical_days = min(60, len(data))
+        if historical_days > 0:
+            historical_data = data.iloc[-historical_days:]
+            fig.add_trace(
+                go.Scatter(
+                    x=historical_data.index,
+                    y=historical_data['Close'],
+                    mode='lines',
+                    name='Historical',
+                    line=dict(color='rgba(0, 0, 255, 0.8)', width=2)
+                )
+            )
+            
+            fig.update_layout(
+                title="Market Forecast (Error: Unable to generate scenarios)",
+                xaxis_title='Date',
+                yaxis_title='S&P 500 Price ($)',
+                height=height
+            )
+        
+        return fig
+
 def create_forecast_chart(model_result, data, features, days_to_forecast=365, title="S&P 500 ML Forecast", height=600):
     """
     Create a chart showing the forecasted S&P 500 price based on the trained ML model

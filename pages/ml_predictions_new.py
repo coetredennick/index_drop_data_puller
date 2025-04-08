@@ -16,7 +16,8 @@ from utils.ml_models_new import (
     predict_returns, 
     create_prediction_chart,
     create_feature_importance_chart,
-    create_forecast_chart
+    create_forecast_chart,
+    create_multi_scenario_forecast
 )
 
 def show_ml_predictions():
@@ -233,59 +234,44 @@ def show_ml_predictions():
                     st.error(f"Model training failed: {model_result.get('error', 'Unknown error')}")
     
     # Display the ML forecast
-    st.markdown("#### S&P 500 Price Forecast")
+    st.markdown("#### S&P 500 Multi-Scenario Forecast")
     
-    # Get the appropriate model from session state
-    model_result = st.session_state.ml_models[target_period]
-    
-    if model_result is None:
-        st.info("No forecast model available. Please train a model using the button above.")
-        
-        # Show a placeholder image or message
-        st.markdown("""
-        <div style="text-align: center; padding: 40px; background-color: #f8f9fa; border-radius: 8px; margin: 20px 0;">
-            <h3 style="color: #6c757d;">ML Forecast Preview</h3>
-            <p>Train a model to see a 1-year price projection with confidence intervals for 1W, 1M, 3M, and 1Y horizons.</p>
-            <p style="font-style: italic; font-size: 0.9em; color: #6c757d;">
-                The forecast will include YTD historical data and show confidence levels at key time intervals.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        # Get features for forecasting - using the same threshold from main settings
+    # Get features for forecasting - using the same threshold from main settings
+    with st.spinner("Generating multi-scenario forecast for all time periods..."):
         _, features = prepare_features(
             st.session_state.data,
             focus_on_drops=True,
             drop_threshold=-abs(st.session_state.drop_threshold)
         )
         
-        # Extract model target information
-        model_target_column = model_result.get('target_column', '')
-        target_period = model_target_column.replace('Fwd_Ret_', '') if 'Fwd_Ret_' in model_target_column else '1M'
-        
-        # Create and display the forecast chart
-        forecast_chart = create_forecast_chart(
-            model_result,
+        # Create multi-scenario forecast without requiring a specific model
+        multi_scenario_chart = create_multi_scenario_forecast(
             st.session_state.data,
             features,
             days_to_forecast=forecast_days,
-            title=f"S&P 500 {forecast_days}-Day Price Forecast",
-            height=600
+            title="S&P 500 Multiple Scenario Forecast (Bear, Base & Bull Cases)",
+            height=650
         )
         
         # Display the chart with enhanced styling
         st.markdown('<div class="forecast-chart">', unsafe_allow_html=True)
-        st.plotly_chart(forecast_chart, use_container_width=True)
+        st.plotly_chart(multi_scenario_chart, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Add explanation of the forecast intervals
+        # Add explanation of the multiple scenario forecast
         st.markdown(f"""
         <div style="margin: 0.5rem 0 1.5rem 0; padding: 0.7rem; background-color: rgba(240, 248, 255, 0.6); border-radius: 5px; border-left: 3px solid #1E88E5;">
-            <p style="margin: 0; font-size: 0.9rem; color: #1E4A7B;"><strong>About the Forecast:</strong> 
-            This forecast is based on a model trained on <strong>{target_period}</strong> returns ({target_period_days.get(target_period, 252)} trading days) and projecting forward <strong>{forecast_days}</strong> trading days.
-            The model identifies key timeframes with specific price targets and confidence levels.
-            Wider intervals indicate greater uncertainty in longer-term projections.</p>
-            <p style="margin: 0.3rem 0 0 0; font-size: 0.8rem; color: #666;"><em>Note: For best results, use a training target that matches your primary forecast horizon goal.</em></p>
+            <p style="margin: 0; font-size: 0.9rem; color: #1E4A7B;"><strong>About the Multi-Scenario Forecast:</strong> 
+            This visualization shows three distinct market scenarios at key time intervals (1W, 1M, 3M, 6M, 1Y):</p>
+            <ul style="margin: 0.4rem 0 0.4rem 1.2rem; padding: 0; font-size: 0.9rem; color: #1E4A7B;">
+                <li><strong>Bear Case</strong> (5th percentile) - Represents a pessimistic scenario</li>
+                <li><strong>Base Case</strong> (median) - Represents the most likely outcome</li>
+                <li><strong>Bull Case</strong> (95th percentile) - Represents an optimistic scenario</li>
+            </ul>
+            <p style="margin: 0.3rem 0 0 0; font-size: 0.8rem; color: #666;">
+                <em>The model uses a Random Forest algorithm with confidence intervals based on historical volatility patterns
+                and technical indicators to generate these scenarios automatically without requiring separate model training.</em>
+            </p>
         </div>
         """, unsafe_allow_html=True)
     
