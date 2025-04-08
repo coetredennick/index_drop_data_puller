@@ -10,14 +10,14 @@ from plotly.subplots import make_subplots
 
 def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
     """
-    Prepare features for machine learning models
+    Prepare features for machine learning models with emphasis on post-drop recovery periods
     
     Parameters:
     -----------
     data : pandas.DataFrame
         DataFrame containing S&P 500 historical data with technical indicators
     focus_on_drops : bool, optional
-        Whether to focus specifically on market drop events
+        Whether to focus specifically on market drop events and subsequent recoveries
     drop_threshold : float, optional
         Percentage threshold for considering a day as a market drop
         
@@ -101,9 +101,31 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         df['volume_ratio_20d'] = df['Volume'] / df['avg_vol_20']
         df['volume_ratio_50d'] = df['Volume'] / df['avg_vol_50']
     
-    # If focusing on market drops, filter to only those events AFTER calculating initial metrics
+    # If focusing on market drops and their recovery periods
     if focus_on_drops:
-        df = df[df['Return'] <= drop_threshold].copy()
+        # First identify days with drops exceeding the threshold
+        drop_days = df[df['Return'] <= drop_threshold].index
+        
+        # For each drop day, include the 30 days after it (recovery period)
+        recovery_periods = []
+        for drop_idx in drop_days:
+            # Get position of this drop day
+            if isinstance(drop_idx, pd.Timestamp) and isinstance(df.index, pd.RangeIndex):
+                # Handle the case where we're working with a Timestamp index converted to RangeIndex
+                drop_pos = df.index.get_loc(df[df[date_column] == drop_idx].index[0])
+            else:
+                # Standard case with RangeIndex
+                drop_pos = df.index.get_loc(drop_idx)
+                
+            # Add the drop day and next 30 days (or as many as available)
+            max_pos = min(drop_pos + 30, len(df) - 1)
+            for i in range(drop_pos, max_pos + 1):
+                recovery_periods.append(df.index[i])
+        
+        # Filter to include only drop days and their recovery periods
+        recovery_periods = sorted(set(recovery_periods))  # Remove duplicates
+        print(f"Found {len(drop_days)} drop days and including {len(recovery_periods)} days of drop+recovery periods")
+        df = df.loc[recovery_periods].copy()
         
         # Add volume rate of change
         df['Volume_ROC_5d'] = df['Volume'].pct_change(periods=5) * 100
@@ -125,13 +147,40 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         # Volume weighted average price (VWAP)-based feature
         df['VWAP_Ratio'] = df['Close'] / ((df['High'] + df['Low'] + df['Close']) / 3 * df['Volume']).cumsum() / df['Volume'].cumsum()
     
-    # Calculate rate of decline metrics for ML models including drawdown from peak metrics
+    # Calculate rate of decline metrics and recovery metrics for ML models
     if 'Return' in df.columns and 'Close' in df.columns:
         # Initialize decline rate columns with NaN
         df['Decline_Duration'] = 1  # Default is 1 day
         df['Decline_Rate_Per_Day'] = df['Return'].abs()  # For single day, rate = magnitude of return
         df['Max_Daily_Decline'] = df['Return'].abs()  # For single day, max = magnitude of return
         df['Decline_Acceleration'] = 0  # For single day, acceleration is 0
+        
+        # Add recovery metrics (new features for post-drop analysis)
+        df['Recovery_1d'] = df['Return'].shift(-1)  # Next day's return
+        df['Recovery_3d'] = df['Close'].shift(-3).pct_change(periods=3) * 100  # 3-day forward return
+        df['Recovery_5d'] = df['Close'].shift(-5).pct_change(periods=5) * 100  # 5-day forward return
+        df['Recovery_10d'] = df['Close'].shift(-10).pct_change(periods=10) * 100  # 10-day forward return
+        
+        # Recovery speed metrics - how fast the price recovers after a drop
+        df['Days_To_Recovery'] = np.nan  # Will fill in with calculations below
+        
+        # For each row, calculate days until price returns to pre-drop level (up to 30 days)
+        max_recovery_window = 30  # Maximum days to look forward for recovery
+        for i in range(len(df) - max_recovery_window):
+            if df['Return'].iloc[i] <= drop_threshold:  # This is a drop day
+                pre_drop_close = df['Close'].iloc[i-1] if i > 0 else df['Close'].iloc[i]
+                recovered = False
+                
+                for j in range(1, max_recovery_window + 1):
+                    if i + j < len(df):
+                        if df['Close'].iloc[i + j] >= pre_drop_close:
+                            df.iloc[i, df.columns.get_loc('Days_To_Recovery')] = j
+                            recovered = True
+                            break
+                
+                if not recovered and i + max_recovery_window < len(df):
+                    # If didn't recover in the window, mark as > max window
+                    df.iloc[i, df.columns.get_loc('Days_To_Recovery')] = max_recovery_window + 1
         
         # Calculate drawdown from local peak (same method as event_detection.py)
         # Calculate running max price (to identify the peak before each drop)
@@ -293,7 +342,14 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         'Drawdown_From_Peak_Pct',  # Percentage drawdown from recent peak
         'Days_Since_Peak',         # Number of days since the most recent peak
         'Peak_To_End_Rate',        # Rate of decline from peak to current point
-        'Pct_Of_Drawdown'          # Current event as % of total drawdown
+        'Pct_Of_Drawdown',         # Current event as % of total drawdown
+        
+        # Recovery metrics (new - analyzing post-drop performance)
+        'Recovery_1d',             # Next day's return after the event
+        'Recovery_3d',             # 3-day forward return
+        'Recovery_5d',             # 5-day forward return
+        'Recovery_10d',            # 10-day forward return
+        'Days_To_Recovery'         # Days until price returns to pre-drop level
     ]
     
     # Only include columns that actually exist in the data
@@ -1847,16 +1903,31 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
         # Handle date conversion issues
         forecast_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=days_to_forecast)
     
-    # Find YTD data for better visualization
+    # Find YTD data for better visualization (show more historical context)
     try:
-        current_year = last_date.year
+        # Include the most recent data (up to April 2025) for better context
+        # Ensure we have the latest data for our predictions
+        current_date = pd.Timestamp.now()
+        current_year = current_date.year
+        
+        # Calculate start date for YTD data (beginning of current year)
         start_of_year = pd.Timestamp(year=current_year, month=1, day=1)
+        
+        # For more context, include previous year data if we're early in the current year
+        if current_date.month < 4:  # If we're in Q1, include previous year
+            start_of_year = pd.Timestamp(year=current_year-1, month=9, day=1)  # Start from previous September
+        
+        # Get YTD data for context
         ytd_data = data[data.index >= start_of_year]
-        if len(ytd_data) < 20:  # If not enough YTD data, use last 60 days
-            ytd_data = data.tail(60)
+        
+        # If not enough YTD data, use last 120 days (about 6 months of trading)
+        if len(ytd_data) < 20:
+            ytd_data = data.tail(120)
+            print(f"Not enough YTD data ({len(ytd_data)} rows), using last 120 days instead")
     except Exception as e:
-        # Fallback to last 60 days if year calculation fails
-        ytd_data = data.tail(60)
+        # Fallback to last 120 days if year calculation fails
+        ytd_data = data.tail(120)
+        print(f"Error calculating YTD range: {str(e)}, using last 120 days instead")
     
     # Use the model to make predictions
     try:
@@ -2125,9 +2196,15 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
                     )
                 )
                 
-                # Update layout with enhanced styling
+                # Update layout with enhanced styling and clear date information
+                # Format the last date for display
+                latest_date_str = last_date.strftime('%b %d, %Y')
+                
+                # Calculate 1-year forecast end date
+                forecast_end_date = forecast_dates[-1].strftime('%b %d, %Y') if forecast_dates else "1 year ahead"
+                
                 fig.update_layout(
-                    title=f"{title} with Confidence Intervals",
+                    title=f"{title}: Latest Data ({latest_date_str}) with 1-Year Forecast to {forecast_end_date}",
                     xaxis_title='Date',
                     yaxis_title='S&P 500 Price ($)',
                     height=height,
@@ -2142,7 +2219,7 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
                         xanchor="right",
                         x=1
                     ),
-                    margin=dict(l=40, r=40, t=50, b=40),
+                    margin=dict(l=40, r=40, t=60, b=40),  # Increased top margin for the longer title
                 )
                 
                 # Add range slider and selector buttons for better navigation
@@ -2208,9 +2285,11 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
             )
         )
         
-        # Format the layout
+        # Format the layout with latest date information
+        latest_date_str = last_date.strftime('%b %d, %Y') if hasattr(last_date, 'strftime') else str(last_date)
+        
         fig.update_layout(
-            title=title + " (ML Model Not Available)",
+            title=f"{title} - Latest Data ({latest_date_str}) (ML Model Not Available)",
             xaxis_title="Date",
             yaxis_title="S&P 500 Price ($)",
             height=height,
@@ -2223,7 +2302,7 @@ def create_forecast_chart(model_result, data, features, days_to_forecast=365, ti
                 xanchor="right",
                 x=1
             ),
-            margin=dict(l=40, r=40, t=50, b=40),
+            margin=dict(l=40, r=40, t=60, b=40),  # Increased top margin for the longer title
         )
     
     # Return the fallback chart
