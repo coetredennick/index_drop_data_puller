@@ -466,8 +466,8 @@ def show_ml_predictions():
             # Color coding based on prediction value
             color = "green" if prediction > 0 else "red"
             
-            # Display prediction result in an enhanced card
-            st.markdown(f"""
+            # Create a complete prediction card with top features included
+            prediction_html = f"""
             <div style="padding: 20px; border-radius: 8px; background-color: white; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin-bottom: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                     <div>
@@ -494,19 +494,26 @@ def show_ml_predictions():
                 <div style="margin-top: 15px; background-color: #f9f9f9; padding: 12px; border-radius: 5px; border-left: 3px solid #1E88E5;">
                     <p style="font-size: 0.9rem; margin: 0 0 8px 0; color: #1E4A7B; font-weight: 500;">Top Contributing Factors:</p>
                     <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-            """, unsafe_allow_html=True)
+            """
             
-            # Display top contributing features
+            # Add top contributing features to the HTML
             for feature in top_features:
-                st.markdown(f"""
-                    <div style="background-color: white; border-radius: 4px; padding: 8px; flex: 1; min-width: 120px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                        <span style="font-size: 0.85rem; color: #555;">{feature['name']}</span>
-                        <p style="font-size: 1rem; font-weight: 600; margin: 5px 0 0 0; color: {feature['color']};">{feature['display']}</p>
-                    </div>
-                """, unsafe_allow_html=True)
+                prediction_html += f"""
+                        <div style="background-color: white; border-radius: 4px; padding: 8px; flex: 1; min-width: 120px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                            <span style="font-size: 0.85rem; color: #555;">{feature['name']}</span>
+                            <p style="font-size: 1rem; font-weight: 600; margin: 5px 0 0 0; color: {feature['color']};">{feature['display']}</p>
+                        </div>
+                """
             
-            # Close the container divs
-            st.markdown("</div></div></div>", unsafe_allow_html=True)
+            # Close all the container divs
+            prediction_html += """
+                    </div>
+                </div>
+            </div>
+            """
+            
+            # Display the complete card
+            st.markdown(prediction_html, unsafe_allow_html=True)
             
             # Add explanation of the confidence interval
             st.markdown(f"""
