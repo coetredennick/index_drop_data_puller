@@ -557,33 +557,113 @@ def show_historical_performance():
             cell_style = "font-size:10px; padding:2px 5px; white-space:nowrap; "
             
             # Add background color heatmap based on value (if it's a number) for all cells except the total column
-            # This creates a green-to-red heatmap with cell background colors
             try:
+                col_name = col.strip()
                 num_val = float(val.replace('%', '').replace(',', '')) if isinstance(val, str) else val
+                
                 if pd.notna(num_val) and not is_last_row:  # Skip coloring for the totals row
                     if not is_total_col:  # Apply heatmap to all non-total columns
-                        # Create a gradient background color based on the value
-                        if num_val < 0:
-                            # Calculate intensity for negative values (red)
-                            intensity = min(abs(num_val) / 10.0, 1.0)  # Max intensity at -10% or lower
-                            # Create RGB components for a red background with varying intensity
-                            r = 255
-                            g = int(255 * (1 - intensity * 0.6))  # Keep some green to avoid pure red
-                            b = int(255 * (1 - intensity * 0.8))  # Less blue for more red appearance
-                            cell_style += f"background-color:rgb({r},{g},{b}); "
-                            # Add contrasting text color for better readability
-                            cell_style += "color:#000000; font-weight:500; "  # Black text
+                        # Different color schemes based on column type
+                        if col_name == 'VIX':
+                            # Purple to red gradient for VIX (higher values = more volatility)
+                            # VIX < 20 is considered low, >30 high
+                            if num_val < 15:
+                                intensity = 0.1  # Very calm
+                            elif num_val < 20:
+                                intensity = 0.3  # Normal
+                            elif num_val < 25:
+                                intensity = 0.5  # Elevated
+                            elif num_val < 30:
+                                intensity = 0.7  # High
+                            else:
+                                intensity = 1.0  # Very high
                             
-                        elif num_val > 0:
-                            # Calculate intensity for positive values (green)
-                            intensity = min(abs(num_val) / 10.0, 1.0)  # Max intensity at +10% or higher
-                            # Create RGB components for a green background with varying intensity
-                            r = int(255 * (1 - intensity * 0.8))  # Less red for more green appearance
-                            g = 255
-                            b = int(255 * (1 - intensity * 0.6))  # Keep some blue to avoid pure green
+                            # Purple-ish for VIX (higher = more purple/red)
+                            r = int(130 + 125 * intensity)
+                            g = int(100 * (1 - intensity * 0.5))
+                            b = int(180 * (1 - intensity * 0.3))
                             cell_style += f"background-color:rgb({r},{g},{b}); "
-                            # Add contrasting text color for better readability
-                            cell_style += "color:#000000; font-weight:500; "  # Black text
+                            
+                            # Text color
+                            text_color = "white" if intensity > 0.6 else "black"
+                            cell_style += f"color:{text_color}; font-weight:500; "
+                        
+                        elif col_name == 'RSI':
+                            # Blue to red gradient for RSI
+                            # RSI < 30 is oversold (blue), RSI > 70 is overbought (red)
+                            if num_val < 30:
+                                # Blue for oversold (stronger blue as it gets more oversold)
+                                intensity = min((30 - num_val) / 30.0, 1.0)
+                                r = int(65 * (1 - intensity * 0.5))
+                                g = int(105 * (1 - intensity * 0.3))
+                                b = 225
+                                text_color = "white" if intensity > 0.5 else "black"
+                            elif num_val > 70:
+                                # Red for overbought (stronger red as it gets more overbought)
+                                intensity = min((num_val - 70) / 30.0, 1.0)
+                                r = 225
+                                g = int(65 * (1 - intensity * 0.8))
+                                b = int(65 * (1 - intensity * 0.8))
+                                text_color = "white" if intensity > 0.3 else "black"
+                            else:
+                                # Neutral white/gray for middle range (30-70)
+                                # Gradually change from blue to white to red
+                                if num_val < 50:
+                                    # Blue to white gradient (30-50)
+                                    ratio = (num_val - 30) / 20.0
+                                    r = int(65 + 190 * ratio)
+                                    g = int(105 + 150 * ratio)
+                                    b = int(225 - 30 * ratio)
+                                else:
+                                    # White to red gradient (50-70)
+                                    ratio = (num_val - 50) / 20.0
+                                    r = int(255)
+                                    g = int(255 - 190 * ratio)
+                                    b = int(255 - 190 * ratio)
+                                text_color = "black"
+                            
+                            cell_style += f"background-color:rgb({r},{g},{b}); "
+                            cell_style += f"color:{text_color}; font-weight:500; "
+                        
+                        elif col_name == 'Volume':
+                            # Green-blue gradient for volume (higher = more intense blue-green)
+                            # Scale based on relative volume (assume normal range is in millions for S&P)
+                            vol_in_millions = num_val / 1000000
+                            intensity = min(vol_in_millions / 10.0, 1.0)  # Max intensity at 10M+
+                            
+                            # Teal/cyan colors for volume
+                            r = int(120 * (1 - intensity * 0.7))
+                            g = int(150 + 105 * intensity)
+                            b = int(160 + 95 * intensity)
+                            cell_style += f"background-color:rgb({r},{g},{b}); "
+                            
+                            # Text color
+                            text_color = "black"
+                            cell_style += f"color:{text_color}; font-weight:500; "
+                        
+                        # Standard green-to-red heatmap for percentage returns
+                        elif '%' in col_name or 'Drop' in col_name:
+                            if num_val < 0:
+                                # Calculate intensity for negative values (red)
+                                intensity = min(abs(num_val) / 10.0, 1.0)  # Max intensity at -10% or lower
+                                # Create RGB components for a red background with varying intensity
+                                r = 255
+                                g = int(255 * (1 - intensity * 0.6))  # Keep some green to avoid pure red
+                                b = int(255 * (1 - intensity * 0.8))  # Less blue for more red appearance
+                                cell_style += f"background-color:rgb({r},{g},{b}); "
+                                # Add contrasting text color for better readability
+                                cell_style += "color:#000000; font-weight:500; "  # Black text
+                                
+                            elif num_val > 0:
+                                # Calculate intensity for positive values (green)
+                                intensity = min(abs(num_val) / 10.0, 1.0)  # Max intensity at +10% or higher
+                                # Create RGB components for a green background with varying intensity
+                                r = int(255 * (1 - intensity * 0.8))  # Less red for more green appearance
+                                g = 255
+                                b = int(255 * (1 - intensity * 0.6))  # Keep some blue to avoid pure green
+                                cell_style += f"background-color:rgb({r},{g},{b}); "
+                                # Add contrasting text color for better readability
+                                cell_style += "color:#000000; font-weight:500; "  # Black text
             except (ValueError, AttributeError):
                 pass  # Not a number or empty, keep default styling
             
