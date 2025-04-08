@@ -201,24 +201,37 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         # (where recent drops are getting bigger each day)
         # Simplify to avoid syntax issues - use a function instead of complex lambda
         def check_accelerating_decline(window):
-            if len(window) != 3:
+            # Safety check - use len() safely for different types
+            if not hasattr(window, '__len__') or len(window) != 3:
                 return 0
                 
-            # Make sure all values are negative
-            if not all(i < 0 for i in window):
+            # Get values carefully based on type
+            try:
+                if hasattr(window, 'iloc'):
+                    # It's a pandas Series
+                    values = [window.iloc[0], window.iloc[1], window.iloc[2]]
+                elif hasattr(window, 'values'):
+                    # It's a pandas object with values attribute
+                    values = window.values
+                elif hasattr(window, '__getitem__'):
+                    # It's an array-like object
+                    values = [window[0], window[1], window[2]]
+                else:
+                    # Can't process this type
+                    return 0
+                    
+                # Make sure all values are negative
+                if not all(i < 0 for i in values):
+                    return 0
+                    
+                # Check if the decline is accelerating (absolute values getting larger)
+                if abs(values[0]) < abs(values[1]) < abs(values[2]):
+                    return 1
+                    
                 return 0
-                
-            # Check if the decline is accelerating (absolute values getting larger)
-            if hasattr(window, 'iloc'):
-                # It's a pandas Series
-                if abs(window.iloc[0]) < abs(window.iloc[1]) < abs(window.iloc[2]):
-                    return 1
-            else:
-                # It's a numpy array
-                if abs(window[0]) < abs(window[1]) < abs(window[2]):
-                    return 1
-            
-            return 0
+            except (IndexError, TypeError, ValueError):
+                # If any error occurs during processing, return 0
+                return 0
             
         # Apply the function to the rolling window
         df['Accelerating_Decline'] = df['Return'].rolling(3).apply(
@@ -1097,8 +1110,32 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
     plotly.graph_objects.Figure
         Multi-scenario forecast chart with confidence intervals for all time periods
     """
-    # Create a forecast figure
+    # Create a forecast figure with a default message
     fig = go.Figure()
+    
+    # Initial validation checks
+    if data is None or data.empty:
+        print("Error: Empty data provided to create_multi_scenario_forecast")
+        fig.add_annotation(
+            text="Cannot create forecast: No data available",
+            showarrow=False,
+            font=dict(color="red", size=18),
+            xref="paper", yref="paper",
+            x=0.5, y=0.5
+        )
+        return fig
+        
+    # Check if we have the minimum required features
+    if not features or len(features) == 0:
+        print("Error: No features provided to create_multi_scenario_forecast")
+        fig.add_annotation(
+            text="Cannot create forecast: No feature columns specified",
+            showarrow=False,
+            font=dict(color="red", size=18),
+            xref="paper", yref="paper",
+            x=0.5, y=0.5
+        )
+        return fig
     
     try:
         # Forecast periods to model and display
@@ -1108,12 +1145,20 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
         # Train models for all periods in parallel
         period_models = {}
         
-        # First check if 'Decline_Acceleration' is in the features
-        # This is a common issue, so we'll handle it specifically
-        if 'Decline_Acceleration' not in data.columns and 'Decline_Acceleration' in features:
-            # Remove it from features list
-            features = [f for f in features if f != 'Decline_Acceleration']
-            print("Removed 'Decline_Acceleration' from feature list as it's not in the data")
+        # Make sure all requested features exist in the data
+        features = [f for f in features if f in data.columns]
+        
+        # If no valid features remain, return an error
+        if not features:
+            print("Error: None of the requested features are available in the data")
+            fig.add_annotation(
+                text="Cannot create forecast: No valid features found in data",
+                showarrow=False,
+                font=dict(color="red", size=18),
+                xref="paper", yref="paper",
+                x=0.5, y=0.5
+            )
+            return fig
         
         # Ensure all requested features are available in the data
         features = [f for f in features if f in data.columns]
