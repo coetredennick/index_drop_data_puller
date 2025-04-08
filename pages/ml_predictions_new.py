@@ -466,63 +466,50 @@ def show_ml_predictions():
             # Color coding based on prediction value
             color = "green" if prediction > 0 else "red"
             
-            # Create a complete prediction card with top features included
-            prediction_html = f"""
-            <div style="padding: 20px; border-radius: 8px; background-color: white; box-shadow: 0 2px 6px rgba(0,0,0,0.15); margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div>
-                        <h3 style="margin: 0 0 10px 0; font-size: 1.2rem; color: #1E4A7B;">Predicted {target_period} Return</h3>
-                        <p style="font-size: 2.4rem; font-weight: 700; margin: 0; color: {color};">{prediction:.2f}%</p>
-                        <p style="font-size: 1rem; margin: 5px 0 0 0; color: #6c757d;">
-                            Range: <span style="color: #555; font-weight: 500;">{lower_bound:.2f}% to {upper_bound:.2f}%</span>
-                        </p>
-                    </div>
-                    <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; min-width: 180px;">
-                        <p style="font-size: 0.9rem; margin: 0 0 5px 0; color: #555; font-weight: 500;">Confidence: 95%</p>
-                        <div style="height: 6px; background-color: #e9ecef; border-radius: 3px; margin-bottom: 10px;">
-                            <div style="height: 100%; width: 95%; background-color: #4CAF50; border-radius: 3px;"></div>
-                        </div>
-                        <p style="font-size: 0.8rem; margin: 0; color: #6c757d;">Based on model accuracy</p>
-                    </div>
-                </div>
+            # Create a card style using Streamlit elements
+            st.subheader(f"Predicted {target_period} Return")
+            
+            # Create a container for the prediction card
+            with st.container():
+                # Layout with columns for prediction value and confidence
+                col1, col2 = st.columns([3, 2])
                 
-                <p style="font-size: 0.9rem; margin: 15px 0 15px 0; color: #666;">
-                    Based on current market conditions analyzed on {prediction_date.strftime('%b %d, %Y') if isinstance(prediction_date, pd.Timestamp) else 'recent data'}, 
-                    the model predicts this return for the S&P 500 over the next {target_period_days.get(target_period, 21)} trading days.
-                </p>
+                with col1:
+                    st.metric(
+                        label="",
+                        value=f"{prediction:.2f}%",
+                        delta=None,
+                    )
+                    st.caption(f"Range: {lower_bound:.2f}% to {upper_bound:.2f}%")
                 
-                <div style="margin-top: 15px; background-color: #f9f9f9; padding: 12px; border-radius: 5px; border-left: 3px solid #1E88E5;">
-                    <p style="font-size: 0.9rem; margin: 0 0 8px 0; color: #1E4A7B; font-weight: 500;">Top Contributing Factors:</p>
-                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-            """
+                with col2:
+                    st.text("Confidence: 95%")
+                    # Use progress bar for confidence visualization
+                    st.progress(0.95)
+                    st.caption("Based on model accuracy")
+                
+                # Date and explanation
+                date_str = prediction_date.strftime('%b %d, %Y') if isinstance(prediction_date, pd.Timestamp) else 'recent data'
+                st.text(f"Based on market conditions analyzed on {date_str}")
+                st.text(f"Forecast period: next {target_period_days.get(target_period, 21)} trading days")
+                
+                # Top contributing factors
+                st.markdown("**Top Contributing Factors:**")
+                
+                # Display top contributing features in columns
+                feature_cols = st.columns(len(top_features))
+                for i, feature in enumerate(top_features):
+                    with feature_cols[i]:
+                        # Create a custom metric for each feature
+                        st.markdown(f"**{feature['name']}**")
+                        st.markdown(f"<span style='color: {feature['color']}; font-size: 16px; font-weight: bold;'>{feature['display']}</span>", unsafe_allow_html=True)
             
-            # Add top contributing features to the HTML
-            for feature in top_features:
-                prediction_html += f"""
-                        <div style="background-color: white; border-radius: 4px; padding: 8px; flex: 1; min-width: 120px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                            <span style="font-size: 0.85rem; color: #555;">{feature['name']}</span>
-                            <p style="font-size: 1rem; font-weight: 600; margin: 5px 0 0 0; color: {feature['color']};">{feature['display']}</p>
-                        </div>
-                """
-            
-            # Close all the container divs
-            prediction_html += """
-                    </div>
-                </div>
-            </div>
-            """
-            
-            # Display the complete card
-            st.markdown(prediction_html, unsafe_allow_html=True)
-            
-            # Add explanation of the confidence interval
-            st.markdown(f"""
-            <div style="margin: 10px 0 20px 0; padding: 10px; background-color: rgba(240, 248, 255, 0.5); border-radius: 5px; font-size: 0.85rem; color: #555;">
-                <strong>Understanding the prediction:</strong> The model predicts a {prediction:.2f}% return over the next {target_period_days.get(target_period, 21)} trading days, 
-                with a 95% confidence interval of {lower_bound:.2f}% to {upper_bound:.2f}%. 
-                This prediction considers current market conditions, technical indicators, VIX data, and trading volumes.
-            </div>
-            """, unsafe_allow_html=True)
+            # Add explanation of the confidence interval using a info box
+            st.info(
+                f"**Understanding the prediction:** The model predicts a {prediction:.2f}% return over the next {target_period_days.get(target_period, 21)} trading days, "
+                f"with a 95% confidence interval of {lower_bound:.2f}% to {upper_bound:.2f}%. "
+                f"This prediction considers current market conditions, technical indicators, VIX data, and trading volumes."
+            )
             
             # Display recovery metrics
             st.markdown("#### Recovery Analysis")
@@ -542,7 +529,7 @@ def show_ml_predictions():
                     "Days": {"value": last_row.get("Days_To_Recovery", None), "label": "Days To Recovery"}
                 }
                 
-                # Create a row of metrics
+                # Create a row of metrics using st.metric
                 cols = st.columns(len(recovery_data))
                 
                 for i, (period, data) in enumerate(recovery_data.items()):
@@ -551,48 +538,51 @@ def show_ml_predictions():
                     
                     if value is not None and not pd.isna(value):
                         if period != "Days":
-                            # Format as percentage with color
+                            # Format as percentage
                             formatted_value = f"{value:.2f}%"
-                            color = "green" if value > 0 else "red"
-                            delta_value = None
+                            delta_color = "normal" if value > 0 else "inverse"
+                            delta = f"{value:.2f}%" if value != 0 else None
+                            
+                            # Display metric with Streamlit's component
+                            with cols[i]:
+                                st.metric(
+                                    label=label,
+                                    value=formatted_value,
+                                    delta=delta,
+                                    delta_color=delta_color,
+                                    help="Post-drop recovery metric"
+                                )
                         else:
                             # Days to recovery formatting
                             if value > 30:
                                 formatted_value = ">30 days"
-                                color = "orange"
                             else:
-                                formatted_value = f"{value:.0f} days"
-                                color = "blue"
-                            delta_value = None
-                        
-                        # Display the metric
-                        with cols[i]:
-                            st.markdown(f"""
-                            <div style="padding: 10px; border-radius: 5px; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                                <p style="font-weight: 500; margin: 0; color: #1E4A7B;">{label}</p>
-                                <p style="font-size: 22px; font-weight: 700; margin: 5px 0; color: {color};">{formatted_value}</p>
-                                <p style="font-size: 11px; margin: 0; color: #6c757d;">Post-drop recovery metric</p>
-                            </div>
-                            """, unsafe_allow_html=True)
+                                formatted_value = f"{int(value)} days"
+                            
+                            # Display metric with Streamlit's component
+                            with cols[i]:
+                                st.metric(
+                                    label=label,
+                                    value=formatted_value,
+                                    delta=None,
+                                    help="Time to return to pre-drop levels"
+                                )
                     else:
                         # Display placeholder for missing data
                         with cols[i]:
-                            st.markdown(f"""
-                            <div style="padding: 10px; border-radius: 5px; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                                <p style="font-weight: 500; margin: 0; color: #1E4A7B;">{label}</p>
-                                <p style="font-size: 22px; font-weight: 700; margin: 5px 0; color: #6c757d;">N/A</p>
-                                <p style="font-size: 11px; margin: 0; color: #6c757d;">Data not available</p>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            st.metric(
+                                label=label,
+                                value="N/A",
+                                delta=None,
+                                help="Data not available"
+                            )
                 
-                # Add explanation for recovery metrics
-                st.markdown("""
-                <div style="margin: 10px 0 20px 0; padding: 10px; background-color: rgba(240, 255, 240, 0.5); border-radius: 5px; font-size: 0.85rem; color: #555;">
-                    <strong>Understanding Recovery Metrics:</strong> These metrics analyze market behavior following significant drops. 
-                    "Days To Recovery" shows the typical time it takes for the market to return to pre-drop levels, while return percentages 
-                    show how the market rebounds over specific time periods after drops.
-                </div>
-                """, unsafe_allow_html=True)
+                # Add explanation for recovery metrics using a success info box
+                st.success(
+                    "**Understanding Recovery Metrics:** These metrics analyze market behavior following significant drops. "
+                    '"Days To Recovery" shows the typical time it takes for the market to return to pre-drop levels, while return percentages '
+                    "show how the market rebounds over specific time periods after drops."
+                )
                 
             except Exception as e:
                 st.warning(f"Unable to display recovery metrics: {str(e)}")
