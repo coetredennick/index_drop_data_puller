@@ -1265,87 +1265,159 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
         # Calculate daily return (with compounding)
         daily_return = ((1 + annual_return_prediction/100) ** (1/252) - 1) * 100
         
-        # Determine confidence scenarios
-        confidence_levels = {
-            'Bear Case': -1.65,  # ~5th percentile
-            'Base Case': 0,      # 50th percentile (median)
-            'Bull Case': 1.65    # ~95th percentile
+        # Calculate historical 1-year returns to use as scenarios
+        print("Calculating actual historical return-based scenarios")
+        
+        # Calculate more realistic price scenarios based on actual historical returns
+        # Rather than statistical confidence intervals
+        
+        # We're going to analyze actual historical performance:
+        # 1. For "Base Case" - use the median actual 1-year return
+        # 2. For "Bear Case" - use the 20th percentile of actual returns (1 in 5 bad year)
+        # 3. For "Bull Case" - use the 80th percentile of actual returns (1 in 5 good year)
+        
+        # Calculate all historical 1-year returns
+        historical_returns = {}
+        
+        # For each forecast period, calculate percentiles of actual returns
+        for period_name, days in forecast_days_map.items():
+            # Calculate forward returns over this period across all history
+            # Period length in days (e.g., 252 days for 1Y)
+            historical_data = data.copy()
+            if 'Close' in historical_data.columns:
+                # Calculate the historical return for this period length
+                historical_data[f'Fwd_Ret_{period_name}_Pct'] = historical_data['Close'].pct_change(days).shift(-days) * 100
+                
+                # Remove NaNs
+                valid_returns = historical_data[f'Fwd_Ret_{period_name}_Pct'].dropna()
+                
+                if len(valid_returns) >= 100:  # Make sure we have enough data for meaningful percentiles
+                    # Calculate key percentiles
+                    percentiles = {
+                        'Bear Case': np.percentile(valid_returns, 20),    # 20th percentile 
+                        'Base Case': np.percentile(valid_returns, 50),    # 50th percentile (median)
+                        'Bull Case': np.percentile(valid_returns, 80)     # 80th percentile 
+                    }
+                    historical_returns[period_name] = percentiles
+                    print(f"Historical {period_name} returns: Bear={percentiles['Bear Case']:.2f}%, Base={percentiles['Base Case']:.2f}%, Bull={percentiles['Bull Case']:.2f}%")
+                else:
+                    print(f"Not enough valid return data for {period_name} period")
+        
+        # If we don't have enough historical data, use reasonable defaults based on S&P 500 history
+        if not historical_returns:
+            print("Using default historical return estimates")
+            historical_returns = {
+                '1W': {'Bear Case': -2.5, 'Base Case': 0.2, 'Bull Case': 2.5},
+                '1M': {'Bear Case': -5.0, 'Base Case': 0.8, 'Bull Case': 6.0},
+                '3M': {'Bear Case': -8.0, 'Base Case': 2.0, 'Bull Case': 10.0},
+                '6M': {'Bear Case': -12.0, 'Base Case': 4.0, 'Bull Case': 15.0},
+                '1Y': {'Bear Case': -15.0, 'Base Case': 8.0, 'Bull Case': 25.0}
+            }
+        
+        # Create scenario lines - one for each scenario
+        scenario_lines = {
+            'Bear Case': [],
+            'Base Case': [],
+            'Bull Case': []
         }
         
-        # Get RMSE from model metrics, but limit it to realistic values
-        rmse = min(8.0, max(1.0, model_1y['metrics'].get('rmse_test', 2.5)))
+        # Determine the main annual returns for each scenario
+        annual_returns = {}
         
-        # Calculate more realistic bounds for percent change
-        # Even in extreme cases, we don't expect >100% or <-50% in a year
-        max_annual_percent_change = 45.0  # Maximum realistic annual % change
-        min_annual_percent_change = -35.0  # Minimum realistic annual % change
+        # If we have historical 1Y data, use that, otherwise use our defaults
+        if '1Y' in historical_returns:
+            annual_returns = {
+                'Bear Case': historical_returns['1Y']['Bear Case'],
+                'Base Case': historical_returns['1Y']['Base Case'],
+                'Bull Case': historical_returns['1Y']['Bull Case']
+            }
+        else:
+            # Default annual returns if no historical data
+            annual_returns = {
+                'Bear Case': -15.0,
+                'Base Case': 8.0,
+                'Bull Case': 25.0
+            }
         
-        # Cap the annual return prediction to reasonable limits
-        annual_return_prediction = max(min_annual_percent_change, min(max_annual_percent_change, annual_return_prediction))
-        
-        # Calculate scenario lines for all periods
-        scenario_lines = {}
-        
-        # Create scenario forecasts
-        for scenario_name, z_score in confidence_levels.items():
-            # Initialize arrays for this scenario
+        # Generate each scenario line
+        for scenario_name in scenario_lines.keys():
+            # Force reasonable limits on annual returns
+            annual_return = annual_returns[scenario_name]
+            
+            # Calculate the daily return with compounding
+            daily_return = ((1 + annual_return/100) ** (1/252) - 1) * 100
+            
+            # Initialize the price series with the last actual price
             forecast_prices = [last_price]
             
-            # Adjust daily return for this scenario
-            # Scale RMSE based on forecast horizon, with diminishing effect for longer horizons
-            scaled_rmse = rmse / (np.sqrt(252) * (1 + 0.1 * np.log(days_to_forecast / 21)))
-            scenario_adjustment = z_score * scaled_rmse  
-            base_daily_return = ((1 + annual_return_prediction/100) ** (1/252) - 1) * 100
-            scenario_daily_return = base_daily_return + scenario_adjustment
-            
-            # Apply stronger constraints on daily returns to prevent unrealistic forecasts
-            # Max/min reasonable daily returns (±0.5% base with adjustment for volatility)
-            max_daily_return = 0.5 + (0.1 * scaled_rmse)  # Higher volatility allows higher daily moves
-            min_daily_return = -0.5 - (0.1 * scaled_rmse)
-            
-            # Constrain the scenario return
-            scenario_daily_return = max(min_daily_return, min(max_daily_return, scenario_daily_return))
-            
-            # Generate price series with a mean-reversion component for more realistic paths
-            prev_adjustment = 0
+            # Generate future prices
             for i in range(days_to_forecast):
-                # Add slight mean reversion (reduces extreme forecasts)
-                if i > 0:
-                    # If we've moved too far from the starting price, pull back slightly
-                    price_change_pct = (forecast_prices[-1] / last_price - 1) * 100
-                    # Mean reversion factor - stronger for extreme moves
-                    reversion = -0.005 * price_change_pct * (abs(price_change_pct) / 10)
-                    # Limit the reversion effect
-                    reversion = max(-0.2, min(0.2, reversion))
+                # For realism, add a small random component to daily changes
+                # This simulates the day-to-day volatility in the market
+                if scenario_name == 'Bear Case':
+                    # More downside volatility in bear markets
+                    noise = np.random.normal(0, 0.15) - 0.05  # Slight downward bias
+                elif scenario_name == 'Bull Case':
+                    # More upside volatility in bull markets
+                    noise = np.random.normal(0, 0.15) + 0.05  # Slight upward bias
                 else:
-                    reversion = 0
-                
-                # Apply the daily return with reversion effect
-                adjusted_return = scenario_daily_return + reversion
+                    # Neutral volatility for base case
+                    noise = np.random.normal(0, 0.12)
+                    
+                # Apply the daily return with a small noise component
+                adjusted_return = daily_return + noise
                 next_price = forecast_prices[-1] * (1 + adjusted_return/100)
                 forecast_prices.append(next_price)
             
-            # Remove first price (which is the actual last price)
+            # Remove the first price (last actual price)
             scenario_lines[scenario_name] = forecast_prices[1:]
-            
-            # Safety check - make sure no forecast exceeds 3x or -80% of the current price
-            max_multiplier = 3.0
-            min_multiplier = 0.2  # 80% loss
-            if any(price > last_price * max_multiplier for price in scenario_lines[scenario_name]):
-                # Cap the forecast prices if they exceed the limit
-                scenario_lines[scenario_name] = [
-                    min(price, last_price * max_multiplier) 
-                    for price in scenario_lines[scenario_name]
-                ]
-                print(f"Warning: Capped {scenario_name} forecast prices that exceeded {max_multiplier}x the current price")
+        
+        # For realism at short horizons, make sure scenarios align with shorter-term historical returns
+        for period_name, days in forecast_days_map.items():
+            if days < len(scenario_lines['Base Case']) and period_name in historical_returns:
+                for scenario_name in scenario_lines.keys():
+                    # Get the target return for this period and scenario
+                    target_return = historical_returns[period_name][scenario_name]
+                    
+                    # Calculate the current implied return at this horizon
+                    current_return = (scenario_lines[scenario_name][days-1] / last_price - 1) * 100
+                    
+                    # Calculate the adjustment needed (as a daily adjustment over the period)
+                    return_gap = target_return - current_return
+                    daily_adjustment = return_gap / days / 100  # Convert to daily decimal
+                    
+                    # Apply an exponentially declining adjustment - stronger near the target date
+                    for i in range(days):
+                        # Weight the adjustment to be stronger closer to the target date
+                        # and weaker at the beginning of the period
+                        weight = np.exp(3 * (i / days)) / np.exp(3)  # Exponential weighting
+                        
+                        # Apply weighted adjustment for this day
+                        if i < len(scenario_lines[scenario_name]):
+                            scenario_lines[scenario_name][i] *= (1 + daily_adjustment * weight)
                 
-            if any(price < last_price * min_multiplier for price in scenario_lines[scenario_name]):
-                # Floor the forecast prices if they fall below the limit
-                scenario_lines[scenario_name] = [
-                    max(price, last_price * min_multiplier) 
-                    for price in scenario_lines[scenario_name]
-                ]
-                print(f"Warning: Capped {scenario_name} forecast prices that fell below {min_multiplier}x the current price")
+                print(f"Adjusted scenarios to match {period_name} historical returns")
+        
+        # Safety check - make sure scenarios have reasonable bounds
+        for scenario_name in scenario_lines.keys():
+            # Maximum allowed price is 2x current for 1-year, scaled for shorter periods
+            # Minimum allowed price is 0.5x current for 1-year (50% drop), scaled for shorter periods
+            
+            max_annual_mult = 1.5 if scenario_name == 'Bear Case' else 2.0 if scenario_name == 'Base Case' else 2.5
+            min_annual_mult = 0.5 if scenario_name == 'Bear Case' else 0.7 if scenario_name == 'Base Case' else 0.9
+            
+            # Apply bounds to each point in the forecast
+            for i in range(len(scenario_lines[scenario_name])):
+                # Scale max/min limits based on how far in the future we are
+                days_ratio = (i + 1) / 252  # Fraction of a year
+                max_mult = 1.0 + (max_annual_mult - 1.0) * days_ratio  # Linear scaling
+                min_mult = 1.0 - (1.0 - min_annual_mult) * days_ratio  # Linear scaling
+                
+                # Enforce limits
+                scenario_lines[scenario_name][i] = min(
+                    max(scenario_lines[scenario_name][i], last_price * min_mult),
+                    last_price * max_mult
+                )
 
         # Add YTD historical data for context
         fig.add_trace(
@@ -1524,7 +1596,7 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
         )
         
         fig.add_annotation(
-            text=f"Scenarios based on Random Forest model | Bear Case: 5th percentile | Base Case: median | Bull Case: 95th percentile",
+            text=f"Scenarios based on historical returns | Bear Case: 20th percentile | Base Case: median | Bull Case: 80th percentile",
             xref="paper",
             yref="paper",
             x=0.5,

@@ -290,13 +290,13 @@ def show_ml_predictions():
                     <p style="margin: 0; font-size: 0.9rem; color: #1E4A7B;"><strong>About the Multi-Scenario Forecast:</strong> 
                     This visualization shows three distinct market scenarios at key time intervals (1W, 1M, 3M, 6M, 1Y):</p>
                     <ul style="margin: 0.4rem 0 0.4rem 1.2rem; padding: 0; font-size: 0.9rem; color: #1E4A7B;">
-                        <li><strong>Bear Case</strong> (5th percentile) - Represents a pessimistic scenario</li>
-                        <li><strong>Base Case</strong> (median) - Represents the most likely outcome</li>
-                        <li><strong>Bull Case</strong> (95th percentile) - Represents an optimistic scenario</li>
+                        <li><strong>Bear Case</strong> (20th percentile) - Based on performance of the worst 20% of historical periods</li>
+                        <li><strong>Base Case</strong> (median) - Represents the most likely outcome based on median historical returns</li>
+                        <li><strong>Bull Case</strong> (80th percentile) - Based on performance of the best 20% of historical periods</li>
                     </ul>
                     <p style="margin: 0.3rem 0 0 0; font-size: 0.8rem; color: #666;">
-                        <em>The model uses a Random Forest algorithm with confidence intervals based on historical volatility patterns
-                        and technical indicators to generate these scenarios automatically without requiring separate model training.</em>
+                        <em>These scenarios are calculated using actual historical market returns rather than theoretical statistical ranges. 
+                        They represent realistic market outcomes based on S&P 500 performance from 1950 to present.</em>
                     </p>
                 </div>
                 """, unsafe_allow_html=True)
