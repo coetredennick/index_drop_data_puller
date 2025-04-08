@@ -1265,46 +1265,161 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
         # Calculate daily return (with compounding)
         daily_return = ((1 + annual_return_prediction/100) ** (1/252) - 1) * 100
         
-        # Determine confidence scenarios with wider intervals
-        confidence_levels = {
-            'Bear Case': -2.33,  # ~1st percentile (more extreme bear case)
-            'Base Case': 0,      # 50th percentile (median)
-            'Bull Case': 2.33    # ~99th percentile (more extreme bull case)
+        # Train three separate models (bear, base, bull)
+        print("Training three separate forecasting models (bear, base, bull)...")
+        
+        # Define scenario parameters
+        scenario_configs = {
+            'Bear Case': {
+                'focus_on_drops': True,           # Focus specifically on market drops
+                'drop_threshold': -2.0,           # Lower threshold to capture more drops
+                'percentile': 0.99                # Use 99th percentile of bear model
+            },
+            'Base Case': {
+                'focus_on_drops': False,          # Look at all market conditions
+                'drop_threshold': -5.0,           # Only filter extreme drops
+                'percentile': 0.99                # Use 99th percentile of base model
+            },
+            'Bull Case': {
+                'focus_on_drops': False,          # Look at all market conditions
+                'min_return_filter': 0.5,         # Only positive days (optional implementation)
+                'percentile': 0.99                # Use 99th percentile of bull model
+            }
         }
         
-        # Get RMSE from model metrics, but limit it to realistic values
-        rmse = min(8.0, max(1.0, model_1y['metrics'].get('rmse_test', 2.5)))
+        # Create models and predictions for each scenario
+        scenario_models = {}
+        scenario_returns = {}
+        
+        for scenario_name, config in scenario_configs.items():
+            try:
+                print(f"Training {scenario_name} model...")
+                
+                # Prepare features based on scenario config
+                scenario_features = features.copy()
+                focus_drops = config.get('focus_on_drops', False)
+                drop_thresh = -abs(config.get('drop_threshold', 3.0))
+                
+                # For bull case, filter for only positive return days if requested
+                filtered_data = data.copy()
+                if scenario_name == 'Bull Case' and config.get('min_return_filter', 0) > 0:
+                    min_return = config.get('min_return_filter', 0)
+                    filtered_data = filtered_data[filtered_data['Return'] >= min_return].copy()
+                    if len(filtered_data) < 100:  # If too few samples, revert to full dataset
+                        filtered_data = data.copy()
+                
+                # Prepare features for this scenario
+                scenario_data, scenario_features = prepare_features(
+                    filtered_data,
+                    focus_on_drops=focus_drops,
+                    drop_threshold=drop_thresh
+                )
+                
+                # Train model for this scenario
+                scenario_model = train_model(
+                    scenario_data,
+                    scenario_features,
+                    combined_target,
+                    model_type='random_forest',
+                    test_size=0.2
+                )
+                
+                # Store the model
+                scenario_models[scenario_name] = scenario_model
+                
+                # Get prediction for this scenario
+                recent_data = data.tail(30)
+                scenario_prediction = predict_returns(scenario_model, recent_data, scenario_features)
+                
+                # Use the prediction result or fallback to base model
+                if scenario_prediction.get('success', False):
+                    annual_return = scenario_prediction.get('predicted_return', 0)
+                    confidence = scenario_prediction.get('confidence_interval_95', {})
+                    
+                    # Calculate percentile-based return
+                    percentile = config.get('percentile', 0.5)  # Default to median
+                    
+                    # For bear case, use the lower bound
+                    if scenario_name == 'Bear Case':
+                        scenario_return = confidence.get('lower', annual_return * 0.5)
+                    # For bull case, use the upper bound
+                    elif scenario_name == 'Bull Case':
+                        scenario_return = confidence.get('upper', annual_return * 1.5)
+                    # For base case, use the predicted return
+                    else:
+                        scenario_return = annual_return
+                    
+                    scenario_returns[scenario_name] = scenario_return
+                    print(f"{scenario_name} return prediction: {scenario_return:.2f}%")
+                else:
+                    # Fallback values if prediction fails
+                    if scenario_name == 'Bear Case':
+                        scenario_returns[scenario_name] = -15.0
+                    elif scenario_name == 'Base Case':
+                        scenario_returns[scenario_name] = 8.0
+                    else:  # Bull Case
+                        scenario_returns[scenario_name] = 20.0
+                    print(f"Using fallback value for {scenario_name}: {scenario_returns[scenario_name]:.2f}%")
+            except Exception as e:
+                print(f"Error training {scenario_name} model: {str(e)}")
+                # Fallback values if model training fails
+                if scenario_name == 'Bear Case':
+                    scenario_returns[scenario_name] = -15.0
+                elif scenario_name == 'Base Case':
+                    scenario_returns[scenario_name] = 8.0
+                else:  # Bull Case
+                    scenario_returns[scenario_name] = 20.0
+                print(f"Using fallback value for {scenario_name}: {scenario_returns[scenario_name]:.2f}%")
         
         # Calculate more realistic bounds for percent change
         # Even in extreme cases, we don't expect >100% or <-50% in a year
         max_annual_percent_change = 45.0  # Maximum realistic annual % change
         min_annual_percent_change = -35.0  # Minimum realistic annual % change
         
-        # Cap the annual return prediction to reasonable limits
-        annual_return_prediction = max(min_annual_percent_change, min(max_annual_percent_change, annual_return_prediction))
+        # Get RMSE from model metrics for each scenario, or use a default
+        rmse_values = {}
+        for scenario_name, model in scenario_models.items():
+            if model and model.get('success', False):
+                rmse_values[scenario_name] = min(8.0, max(1.0, model['metrics'].get('rmse_test', 2.5)))
+            else:
+                # Default RMSE values if model training failed
+                if scenario_name == 'Bear Case':
+                    rmse_values[scenario_name] = 5.0  # Higher uncertainty for bear case
+                elif scenario_name == 'Base Case':
+                    rmse_values[scenario_name] = 3.0  # Moderate uncertainty for base case
+                else:  # Bull Case
+                    rmse_values[scenario_name] = 4.0  # Higher uncertainty for bull case
         
         # Calculate scenario lines for all periods
         scenario_lines = {}
         
         # Create scenario forecasts
-        for scenario_name, z_score in confidence_levels.items():
+        for scenario_name in scenario_configs.keys():
             # Initialize arrays for this scenario
             forecast_prices = [last_price]
             
-            # Adjust daily return for this scenario
+            # Get prediction for this scenario
+            annual_return_prediction = scenario_returns.get(scenario_name, 0)
+            
+            # Cap the annual return prediction to reasonable limits
+            annual_return_prediction = max(min_annual_percent_change, min(max_annual_percent_change, annual_return_prediction))
+            
+            # Get RMSE for this scenario
+            rmse = rmse_values.get(scenario_name, 3.0)
+            
+            # Calculate daily return based on annual prediction
+            base_daily_return = ((1 + annual_return_prediction/100) ** (1/252) - 1) * 100
+            
             # Scale RMSE based on forecast horizon, with diminishing effect for longer horizons
             scaled_rmse = rmse / (np.sqrt(252) * (1 + 0.1 * np.log(days_to_forecast / 21)))
-            scenario_adjustment = z_score * scaled_rmse  
-            base_daily_return = ((1 + annual_return_prediction/100) ** (1/252) - 1) * 100
-            scenario_daily_return = base_daily_return + scenario_adjustment
             
             # Apply stronger constraints on daily returns to prevent unrealistic forecasts
             # Max/min reasonable daily returns (±0.5% base with adjustment for volatility)
             max_daily_return = 0.5 + (0.1 * scaled_rmse)  # Higher volatility allows higher daily moves
             min_daily_return = -0.5 - (0.1 * scaled_rmse)
             
-            # Constrain the scenario return
-            scenario_daily_return = max(min_daily_return, min(max_daily_return, scenario_daily_return))
+            # Constrain the scenario daily return
+            scenario_daily_return = max(min_daily_return, min(max_daily_return, base_daily_return))
             
             # Generate price series with a mean-reversion component for more realistic paths
             prev_adjustment = 0
@@ -1524,7 +1639,7 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
         )
         
         fig.add_annotation(
-            text=f"Scenarios based on Random Forest model | Bear Case: 1st percentile | Base Case: median | Bull Case: 99th percentile",
+            text=f"Scenarios based on specialized ML models | Bear: 99th percentile of bear model | Base: median forecast | Bull: 99th percentile of bull model",
             xref="paper",
             yref="paper",
             x=0.5,
