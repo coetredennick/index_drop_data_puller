@@ -624,9 +624,17 @@ def show_historical_performance():
                         applied_color = True
                         
                     elif col_name == 'Volume':
-                        # Volume normalization (standard S&P volume range)
+                        # Volume normalization with increased variance
+                        # Use a more aggressive log-based normalization to compress the range
+                        # This will make high values (like 5B and 8B) appear more similar
                         vol_in_billions = num_val / 1000000000
-                        norm_val = max(0.0, min(1.0, vol_in_billions / 5.0))  # Normalize to 0-1
+                        
+                        # Apply log transform first to compress the range (add 0.1 to avoid log(0))
+                        log_vol = max(0.0, min(1.0, np.log10(vol_in_billions + 0.1) / 2.0))
+                        
+                        # Then apply a power transform to increase variance at lower values
+                        # This makes the transition more pronounced in the mid-range
+                        norm_val = log_vol ** 0.7  # Adjust exponent to control variance
                         
                         # Same green-yellow-red gradient for consistency
                         if norm_val < 0.5:
@@ -640,10 +648,10 @@ def show_historical_performance():
                             g = int(255 * (1 - (norm_val - 0.5) * 2))  # 255 -> 0
                             b = 0
                         
-                        # Add indicator for extreme values
-                        if norm_val < 0.2:  # Very low volume
+                        # Add indicator for extreme values - using the actual volume metric
+                        if vol_in_billions < 0.5:  # Very low volume (< 500M)
                             cell_style += "border-left: 3px solid #228B22;"  # Forest Green
-                        elif norm_val > 0.8:  # Very high volume
+                        elif vol_in_billions > 5.0:  # Very high volume (> 5B)
                             cell_style += "border-left: 3px solid #8B0000;"  # Dark Red
                             
                         applied_color = True
