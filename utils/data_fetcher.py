@@ -52,7 +52,7 @@ def fetch_sp500_data(start_date, end_date, include_vix=True):
         sp500['HL_Range'] = (sp500['High'] - sp500['Low']) / sp500['Open'] * 100
         
         # Forward returns for different time periods
-        for days, label in [(5, '1W'), (21, '1M'), (63, '3M'), (126, '6M'), (252, '1Y'), (756, '3Y')]:
+        for days, label in [(1, '1D'), (5, '1W'), (21, '1M'), (63, '3M'), (126, '6M'), (252, '1Y'), (756, '3Y')]:
             sp500[f'Fwd_Ret_{label}'] = sp500['Close'].pct_change(periods=days).shift(-days) * 100
         
         # Fetch VIX data if requested

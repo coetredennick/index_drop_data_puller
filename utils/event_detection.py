@@ -103,7 +103,7 @@ def detect_drop_events(data, threshold_pct):
             })
         
         # Add forward returns
-        for period in ['1W', '1M', '3M', '6M', '1Y', '3Y']:
+        for period in ['1D', '1W', '1M', '3M', '6M', '1Y', '3Y']:
             column = f'Fwd_Ret_{period}'
             if column in row and not pd.isna(row[column]):
                 event[f'fwd_return_{period.lower()}'] = row[column]
@@ -258,7 +258,7 @@ def detect_consecutive_drops(data, threshold_pct, num_days):
             
             # Add forward returns from the last day of the drop
             last_row = window.iloc[-1]
-            for period in ['1W', '1M', '3M', '6M', '1Y', '3Y']:
+            for period in ['1D', '1W', '1M', '3M', '6M', '1Y', '3Y']:
                 column = f'Fwd_Ret_{period}'
                 if column in last_row and not pd.isna(last_row[column]):
                     event[f'fwd_return_{period.lower()}'] = last_row[column]

@@ -398,6 +398,7 @@ def show_historical_performance():
             'VIX': vix_str,
             'Volume': volume_str,
             'RSI': rsi_str,
+            '1D (%)': event.get('fwd_return_1d', None),
             '1W (%)': event.get('fwd_return_1w', None),
             '1M (%)': event.get('fwd_return_1m', None),
             '3M (%)': event.get('fwd_return_3m', None),
@@ -415,7 +416,7 @@ def show_historical_performance():
         events_df = events_df.sort_values('Date', ascending=False)
         
         # Add a column for the total/average return across periods
-        events_df['Total Avg (%)'] = events_df[['1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)']].mean(axis=1)
+        events_df['Total Avg (%)'] = events_df[['1D (%)', '1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)']].mean(axis=1)
         
         # Add a totals row at the bottom
         totals_row = {
@@ -457,7 +458,7 @@ def show_historical_performance():
         totals_row['Decline Rate'] = f"Avg: {avg_rate:.2f}%/d"
         
         # Add totals for each return period
-        for col in ['1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)', 'Total Avg (%)']:
+        for col in ['1D (%)', '1W (%)', '1M (%)', '3M (%)', '6M (%)', '1Y (%)', '3Y (%)', 'Total Avg (%)']:
             totals_row[col] = events_df[col].mean()
         
         # Add totals row at the bottom
