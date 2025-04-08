@@ -290,9 +290,9 @@ def show_ml_predictions():
                     <p style="margin: 0; font-size: 0.9rem; color: #1E4A7B;"><strong>About the Multi-Scenario Forecast:</strong> 
                     This visualization shows three distinct market scenarios at key time intervals (1W, 1M, 3M, 6M, 1Y):</p>
                     <ul style="margin: 0.4rem 0 0.4rem 1.2rem; padding: 0; font-size: 0.9rem; color: #1E4A7B;">
-                        <li><strong>Bear Case</strong> (5th percentile) - Represents a pessimistic scenario</li>
+                        <li><strong>Bear Case</strong> (1st percentile) - Represents a highly pessimistic scenario</li>
                         <li><strong>Base Case</strong> (median) - Represents the most likely outcome</li>
-                        <li><strong>Bull Case</strong> (95th percentile) - Represents an optimistic scenario</li>
+                        <li><strong>Bull Case</strong> (99th percentile) - Represents a highly optimistic scenario</li>
                     </ul>
                     <p style="margin: 0.3rem 0 0 0; font-size: 0.8rem; color: #666;">
                         <em>The model uses a Random Forest algorithm with confidence intervals based on historical volatility patterns

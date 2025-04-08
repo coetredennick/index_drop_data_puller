@@ -1265,11 +1265,11 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
         # Calculate daily return (with compounding)
         daily_return = ((1 + annual_return_prediction/100) ** (1/252) - 1) * 100
         
-        # Determine confidence scenarios
+        # Determine confidence scenarios with wider intervals
         confidence_levels = {
-            'Bear Case': -1.65,  # ~5th percentile
+            'Bear Case': -2.33,  # ~1st percentile (more extreme bear case)
             'Base Case': 0,      # 50th percentile (median)
-            'Bull Case': 1.65    # ~95th percentile
+            'Bull Case': 2.33    # ~99th percentile (more extreme bull case)
         }
         
         # Get RMSE from model metrics, but limit it to realistic values
@@ -1524,7 +1524,7 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
         )
         
         fig.add_annotation(
-            text=f"Scenarios based on Random Forest model | Bear Case: 5th percentile | Base Case: median | Bull Case: 95th percentile",
+            text=f"Scenarios based on Random Forest model | Bear Case: 1st percentile | Base Case: median | Bull Case: 99th percentile",
             xref="paper",
             yref="paper",
             x=0.5,
