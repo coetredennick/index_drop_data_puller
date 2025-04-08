@@ -605,43 +605,68 @@ def show_historical_performance():
                         
                     elif col_name == 'RSI':
                         # RSI normalization (0-100 scale)
-                        # For RSI, low values (oversold) should be deep red
-                        # Typically, RSI below 30 is oversold, above 70 is overbought
+                        # For RSI, we'll create a dual extreme color scheme:
+                        # - RSI below 30 (oversold) should be deep red (extreme fear)
+                        # - RSI above 70 (overbought) should be deep green (extreme greed)
+                        # - RSI in middle range (40-60) should be neutral/yellow
                         
-                        # Calculate normalized value where 0 = most oversold (RSI = 0)
-                        # and 1 = neutral (RSI = 50 or higher)
-                        rsi_norm = 0.0
+                        # Different color scheme for RSI:
+                        # 0-30: Deep red to light red (oversold)
+                        # 30-50: Light red to yellow (approaching neutral)
+                        # 50-70: Yellow to light green (approaching overbought)
+                        # 70-100: Light green to deep green (overbought)
                         
-                        # Focus on oversold conditions for consistency with VIX/Volume extremes
-                        if num_val <= 50:
-                            # Map RSI 0-50 to norm_val 1.0-0.0 (inverse) with emphasis on lower values
-                            # This makes lower RSI = higher norm_val = more red
-                            rsi_norm = 1.0 - (num_val / 50.0) ** 0.7  # Power < 1 increases contrast at low RSI
-                        else:
-                            # For RSI > 50, keep green to yellow gradient
-                            # Map RSI 50-100 to norm_val 0.0-0.5
-                            rsi_norm = ((num_val - 50) / 100.0)  # Reduce intensity for overbought
-                        
-                        # Limit the range
-                        norm_val = max(0.0, min(1.0, rsi_norm))
-                        
-                        # Calculate colors based on normalized value
-                        if norm_val < 0.5:
-                            # Green to yellow gradient (0-0.5)
-                            r = int(60 + 195 * norm_val * 2)  # 60 -> 255
-                            g = int(200 + 55 * norm_val * 2)  # 200 -> 255
-                            b = int(90 * (1 - norm_val * 2))  # 90 -> 0
-                        else:
-                            # Yellow to red gradient (0.5-1.0)
+                        # First set the base colors based on the RSI range
+                        if num_val <= 30:
+                            # Oversold range (0-30) - deep red to light red
+                            # Normalize to 0-1 range within this segment
+                            segment_norm = 1.0 - (num_val / 30.0)
+                            # Apply power function to increase contrast at lower values
+                            intensity = segment_norm ** 0.7  # Increase color intensity at lower RSI
+                            # Red gradient (deep red to lighter red)
                             r = 255
-                            g = int(255 * (1 - (norm_val - 0.5) * 2))  # 255 -> 0
+                            g = int(80 + (175 * (1 - intensity)))  # 80 (deep red) to 255 (light red)
+                            b = int(80 * (1 - intensity))          # Keep some blue for color depth
+                            
+                        elif num_val <= 50:
+                            # Approaching neutral from oversold (30-50) - light red to yellow
+                            # Normalize to 0-1 range within this segment
+                            segment_norm = (num_val - 30) / 20.0  # 0 at RSI=30, 1 at RSI=50
+                            # Red to yellow gradient
+                            r = 255
+                            g = int(160 + (95 * segment_norm))  # 160 to 255
                             b = 0
+                            
+                        elif num_val <= 70:
+                            # Approaching overbought (50-70) - yellow to light green
+                            # Normalize to 0-1 range within this segment
+                            segment_norm = (num_val - 50) / 20.0  # 0 at RSI=50, 1 at RSI=70
+                            # Yellow to light green gradient
+                            r = int(255 * (1 - segment_norm))    # 255 to 0
+                            g = 255
+                            b = 0
+                            
+                        else:
+                            # Overbought range (70-100) - light green to deep green
+                            # Normalize to 0-1 range within this segment
+                            segment_norm = (num_val - 70) / 30.0  # 0 at RSI=70, 1 at RSI=100
+                            # Apply power function to increase contrast at higher values
+                            intensity = segment_norm ** 0.7  # Increase color intensity at higher RSI
+                            # Green gradient (light green to deep green)
+                            r = int(100 * (1 - intensity))    # Keep some red for color depth
+                            g = int(255 - (155 * intensity))  # 255 (light green) to 100 (deep green)
+                            b = int(50 * (1 - intensity))     # Keep some blue for color depth
+                        
+                        # Ensure valid RGB values
+                        r = max(0, min(255, r))
+                        g = max(0, min(255, g))
+                        b = max(0, min(255, b))
                         
                         # Add indicator for extreme values
                         if num_val < 30:  # Oversold
                             cell_style += "border-left: 3px solid #8B0000;"  # Dark Red (oversold)
                         elif num_val > 70:  # Overbought
-                            cell_style += "border-left: 3px solid #FF8C00;"  # Dark Orange (overbought)
+                            cell_style += "border-left: 3px solid #006400;"  # Dark Green (overbought)
                             
                         applied_color = True
                         
