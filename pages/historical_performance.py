@@ -569,86 +569,111 @@ def show_historical_performance():
                     
                     # Technical indicators: VIX, RSI, Volume with green-yellow-red gradient
                     if col_name == 'VIX':
-                        # VIX normalization - typically ranges from 10-50
-                        # Low VIX (green) to high VIX (red)
-                        norm_val = max(0.0, min(1.0, (num_val - 10) / 40.0))
+                        # VIX normalization - typically ranges from 10-80
+                        # High VIX values indicate extreme volatility/fear
+                        # We want high VIX (extreme fear) to be deep red
                         
-                        # Create common low-to-high gradient (green -> yellow -> red)
+                        # Apply a more exponential scaling to increase contrast
+                        # This will make higher VIX values more red more quickly
+                        vix_norm = max(0.0, min(1.0, ((num_val - 10) / 40.0) ** 1.5))
+                        
+                        # Create common green-yellow-red gradient
+                        # Reverse the norm_val calculation so 1.0 = highest VIX (most extreme)
+                        norm_val = vix_norm  # Higher VIX = higher norm_val = more red
+                        
+                        # Calculate colors based on normalized value
                         if norm_val < 0.5:
-                            # Green to yellow (0-0.5)
+                            # Green to yellow gradient (0-0.5)
                             r = int(60 + 195 * norm_val * 2)  # 60 -> 255
                             g = int(200 + 55 * norm_val * 2)  # 200 -> 255
                             b = int(90 * (1 - norm_val * 2))  # 90 -> 0
                         else:
-                            # Yellow to red (0.5-1.0)
+                            # Yellow to red gradient (0.5-1.0)
                             r = 255
                             g = int(255 * (1 - (norm_val - 0.5) * 2))  # 255 -> 0
                             b = 0
                         
                         # Add indicator for extreme values
-                        if norm_val < 0.2:  # Very low VIX
+                        if num_val < 15:  # Very low VIX (calm)
                             cell_style += "border-left: 3px solid #228B22;"  # Forest Green
-                        elif norm_val > 0.8:  # Very high VIX
+                        elif num_val > 30:  # Very high VIX (fear)
                             cell_style += "border-left: 3px solid #8B0000;"  # Dark Red
                             
                         applied_color = True
                         
                     elif col_name == 'RSI':
                         # RSI normalization (0-100 scale)
-                        # For RSI we want a special gradient:
-                        # Green in middle (RSI=50, neutral), red at extremes (RSI=0 or RSI=100)
+                        # For RSI, low values (oversold) should be deep red
+                        # Typically, RSI below 30 is oversold, above 70 is overbought
                         
-                        # Calculate how far from neutral 50 the RSI is (0 at 50, 1.0 at 0 or 100)
-                        distance_from_middle = abs(num_val - 50) / 50.0
+                        # Calculate normalized value where 0 = most oversold (RSI = 0)
+                        # and 1 = neutral (RSI = 50 or higher)
+                        rsi_norm = 0.0
                         
-                        # Create a gradient where middle (50) is green and extremes (0 or 100) are red
-                        if distance_from_middle < 0.5:  # Closer to neutral (30-70 range)
-                            # Green to yellow gradient as we move away from 50
-                            ratio = distance_from_middle * 2  # 0-1 scale
-                            r = int(60 + 195 * ratio)      # 60 -> 255
-                            g = int(200 + 55 * ratio)      # 200 -> 255
-                            b = int(90 * (1 - ratio))      # 90 -> 0
-                        else:  # Further from neutral (<30 or >70)
-                            # Yellow to red gradient
-                            ratio = (distance_from_middle - 0.5) * 2  # 0-1 scale
+                        # Focus on oversold conditions for consistency with VIX/Volume extremes
+                        if num_val <= 50:
+                            # Map RSI 0-50 to norm_val 1.0-0.0 (inverse) with emphasis on lower values
+                            # This makes lower RSI = higher norm_val = more red
+                            rsi_norm = 1.0 - (num_val / 50.0) ** 0.7  # Power < 1 increases contrast at low RSI
+                        else:
+                            # For RSI > 50, keep green to yellow gradient
+                            # Map RSI 50-100 to norm_val 0.0-0.5
+                            rsi_norm = ((num_val - 50) / 100.0)  # Reduce intensity for overbought
+                        
+                        # Limit the range
+                        norm_val = max(0.0, min(1.0, rsi_norm))
+                        
+                        # Calculate colors based on normalized value
+                        if norm_val < 0.5:
+                            # Green to yellow gradient (0-0.5)
+                            r = int(60 + 195 * norm_val * 2)  # 60 -> 255
+                            g = int(200 + 55 * norm_val * 2)  # 200 -> 255
+                            b = int(90 * (1 - norm_val * 2))  # 90 -> 0
+                        else:
+                            # Yellow to red gradient (0.5-1.0)
                             r = 255
-                            g = int(255 * (1 - ratio))    # 255 -> 0
+                            g = int(255 * (1 - (norm_val - 0.5) * 2))  # 255 -> 0
                             b = 0
                         
                         # Add indicator for extreme values
                         if num_val < 30:  # Oversold
                             cell_style += "border-left: 3px solid #8B0000;"  # Dark Red (oversold)
                         elif num_val > 70:  # Overbought
-                            cell_style += "border-left: 3px solid #8B0000;"  # Dark Red (overbought)
+                            cell_style += "border-left: 3px solid #FF8C00;"  # Dark Orange (overbought)
                             
                         applied_color = True
                         
                     elif col_name == 'Volume':
-                        # Volume normalization with increased variance
-                        # Use a more aggressive log-based normalization to compress the range
-                        # This will make high values (like 5B and 8B) appear more similar
+                        # Volume normalization (billions scale)
+                        # High volume indicates high market activity/potential stress
+                        # We want highest volume to be deep red
+                        
                         vol_in_billions = num_val / 1000000000
                         
-                        # Apply log transform first to compress the range (add 0.1 to avoid log(0))
-                        log_vol = max(0.0, min(1.0, np.log10(vol_in_billions + 0.1) / 2.0))
+                        # Use log scale to compress range, then normalize to 0-1
+                        # Add 0.1 to avoid log(0) issues
+                        log_vol = np.log10(vol_in_billions + 0.1)
                         
-                        # Then apply a power transform to increase variance at lower values
-                        # This makes the transition more pronounced in the mid-range
-                        norm_val = log_vol ** 0.7  # Adjust exponent to control variance
+                        # Normalize to 0-1 range where 1 = highest volume
+                        # Typical log(volume) range is -1 to 1.5
+                        vol_norm = max(0.0, min(1.0, (log_vol + 1) / 2.5))
                         
-                        # Same green-yellow-red gradient for consistency
+                        # Apply power function to increase contrast 
+                        norm_val = vol_norm ** 0.8  # Higher volume = higher norm_val = more red
+                        
+                        # Calculate colors based on normalized value
                         if norm_val < 0.5:
-                            # Green to yellow gradient
+                            # Green to yellow gradient (0-0.5)
                             r = int(60 + 195 * norm_val * 2)  # 60 -> 255
                             g = int(200 + 55 * norm_val * 2)  # 200 -> 255
                             b = int(90 * (1 - norm_val * 2))  # 90 -> 0
                         else:
-                            # Yellow to red gradient
+                            # Yellow to red gradient (0.5-1.0)
                             r = 255
                             g = int(255 * (1 - (norm_val - 0.5) * 2))  # 255 -> 0
                             b = 0
                         
-                        # Add indicator for extreme values - using the actual volume metric
+                        # Add indicator for extreme values
                         if vol_in_billions < 0.5:  # Very low volume (< 500M)
                             cell_style += "border-left: 3px solid #228B22;"  # Forest Green
                         elif vol_in_billions > 5.0:  # Very high volume (> 5B)
