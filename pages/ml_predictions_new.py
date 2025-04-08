@@ -244,36 +244,45 @@ def show_ml_predictions():
             drop_threshold=-abs(st.session_state.drop_threshold)
         )
         
-        # Create multi-scenario forecast without requiring a specific model
-        multi_scenario_chart = create_multi_scenario_forecast(
-            st.session_state.data,
-            features,
-            days_to_forecast=forecast_days,
-            title="S&P 500 Multiple Scenario Forecast (Bear, Base & Bull Cases)",
-            height=650
-        )
-        
-        # Display the chart with enhanced styling
-        st.markdown('<div class="forecast-chart">', unsafe_allow_html=True)
-        st.plotly_chart(multi_scenario_chart, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Add explanation of the multiple scenario forecast
-        st.markdown(f"""
-        <div style="margin: 0.5rem 0 1.5rem 0; padding: 0.7rem; background-color: rgba(240, 248, 255, 0.6); border-radius: 5px; border-left: 3px solid #1E88E5;">
-            <p style="margin: 0; font-size: 0.9rem; color: #1E4A7B;"><strong>About the Multi-Scenario Forecast:</strong> 
-            This visualization shows three distinct market scenarios at key time intervals (1W, 1M, 3M, 6M, 1Y):</p>
-            <ul style="margin: 0.4rem 0 0.4rem 1.2rem; padding: 0; font-size: 0.9rem; color: #1E4A7B;">
-                <li><strong>Bear Case</strong> (5th percentile) - Represents a pessimistic scenario</li>
-                <li><strong>Base Case</strong> (median) - Represents the most likely outcome</li>
-                <li><strong>Bull Case</strong> (95th percentile) - Represents an optimistic scenario</li>
-            </ul>
-            <p style="margin: 0.3rem 0 0 0; font-size: 0.8rem; color: #666;">
-                <em>The model uses a Random Forest algorithm with confidence intervals based on historical volatility patterns
-                and technical indicators to generate these scenarios automatically without requiring separate model training.</em>
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        try:
+            # Create multi-scenario forecast without requiring a specific model
+            multi_scenario_chart = create_multi_scenario_forecast(
+                st.session_state.data,
+                features,
+                days_to_forecast=forecast_days,
+                title="S&P 500 Multiple Scenario Forecast (Bear, Base & Bull Cases)",
+                height=650
+            )
+            
+            # Display the chart with enhanced styling
+            st.markdown('<div class="forecast-chart">', unsafe_allow_html=True)
+            st.plotly_chart(multi_scenario_chart, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Add explanation of the multiple scenario forecast
+            st.markdown(f"""
+            <div style="margin: 0.5rem 0 1.5rem 0; padding: 0.7rem; background-color: rgba(240, 248, 255, 0.6); border-radius: 5px; border-left: 3px solid #1E88E5;">
+                <p style="margin: 0; font-size: 0.9rem; color: #1E4A7B;"><strong>About the Multi-Scenario Forecast:</strong> 
+                This visualization shows three distinct market scenarios at key time intervals (1W, 1M, 3M, 6M, 1Y):</p>
+                <ul style="margin: 0.4rem 0 0.4rem 1.2rem; padding: 0; font-size: 0.9rem; color: #1E4A7B;">
+                    <li><strong>Bear Case</strong> (5th percentile) - Represents a pessimistic scenario</li>
+                    <li><strong>Base Case</strong> (median) - Represents the most likely outcome</li>
+                    <li><strong>Bull Case</strong> (95th percentile) - Represents an optimistic scenario</li>
+                </ul>
+                <p style="margin: 0.3rem 0 0 0; font-size: 0.8rem; color: #666;">
+                    <em>The model uses a Random Forest algorithm with confidence intervals based on historical volatility patterns
+                    and technical indicators to generate these scenarios automatically without requiring separate model training.</em>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        except Exception as e:
+            st.error(f"Error creating multi-scenario forecast: {str(e)}")
+            st.info("Falling back to individual ML model training approach. Please train a model using the button above.")
+            
+    # Get the appropriate model from session state for individual predictions
+    # Define model_result before using it
+    target_period = st.session_state.get("target_period", "1M")
+    model_result = st.session_state.ml_models.get(target_period)
     
     # Technical indicators for current market conditions
     st.markdown("#### Key Technical Indicators")
