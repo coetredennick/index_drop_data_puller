@@ -517,6 +517,79 @@ def show_ml_predictions():
             </div>
             """, unsafe_allow_html=True)
             
+            # Display recovery metrics
+            st.markdown("#### Recovery Analysis")
+            
+            # Get the latest data point for recovery metrics
+            recovery_data = {}
+            
+            # Try to extract recovery metrics from recent data
+            try:
+                last_row = recent_data.iloc[-1]
+                
+                recovery_data = {
+                    "1D": {"value": last_row.get("Recovery_1d", None), "label": "Next Day Return"},
+                    "3D": {"value": last_row.get("Recovery_3d", None), "label": "3 Day Return"},
+                    "5D": {"value": last_row.get("Recovery_5d", None), "label": "5 Day Return"},
+                    "10D": {"value": last_row.get("Recovery_10d", None), "label": "10 Day Return"},
+                    "Days": {"value": last_row.get("Days_To_Recovery", None), "label": "Days To Recovery"}
+                }
+                
+                # Create a row of metrics
+                cols = st.columns(len(recovery_data))
+                
+                for i, (period, data) in enumerate(recovery_data.items()):
+                    value = data["value"]
+                    label = data["label"]
+                    
+                    if value is not None and not pd.isna(value):
+                        if period != "Days":
+                            # Format as percentage with color
+                            formatted_value = f"{value:.2f}%"
+                            color = "green" if value > 0 else "red"
+                            delta_value = None
+                        else:
+                            # Days to recovery formatting
+                            if value > 30:
+                                formatted_value = ">30 days"
+                                color = "orange"
+                            else:
+                                formatted_value = f"{value:.0f} days"
+                                color = "blue"
+                            delta_value = None
+                        
+                        # Display the metric
+                        with cols[i]:
+                            st.markdown(f"""
+                            <div style="padding: 10px; border-radius: 5px; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <p style="font-weight: 500; margin: 0; color: #1E4A7B;">{label}</p>
+                                <p style="font-size: 22px; font-weight: 700; margin: 5px 0; color: {color};">{formatted_value}</p>
+                                <p style="font-size: 11px; margin: 0; color: #6c757d;">Post-drop recovery metric</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    else:
+                        # Display placeholder for missing data
+                        with cols[i]:
+                            st.markdown(f"""
+                            <div style="padding: 10px; border-radius: 5px; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <p style="font-weight: 500; margin: 0; color: #1E4A7B;">{label}</p>
+                                <p style="font-size: 22px; font-weight: 700; margin: 5px 0; color: #6c757d;">N/A</p>
+                                <p style="font-size: 11px; margin: 0; color: #6c757d;">Data not available</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                
+                # Add explanation for recovery metrics
+                st.markdown("""
+                <div style="margin: 10px 0 20px 0; padding: 10px; background-color: rgba(240, 255, 240, 0.5); border-radius: 5px; font-size: 0.85rem; color: #555;">
+                    <strong>Understanding Recovery Metrics:</strong> These metrics analyze market behavior following significant drops. 
+                    "Days To Recovery" shows the typical time it takes for the market to return to pre-drop levels, while return percentages 
+                    show how the market rebounds over specific time periods after drops.
+                </div>
+                """, unsafe_allow_html=True)
+                
+            except Exception as e:
+                st.warning(f"Unable to display recovery metrics: {str(e)}")
+            
         else:
             # Display simplified error message
             st.warning("Unable to make prediction with current market data. Try adjusting the settings or training a new model.")
