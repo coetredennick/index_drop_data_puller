@@ -339,7 +339,7 @@ def show_ml_predictions():
     if model_result is None or not model_result.get('success', False):
         try:
             with st.spinner(f"Auto-training {target_period} prediction model..."):
-                st.session_state.drop_threshold = -3.0  # Default drop threshold
+                st.session_state.drop_threshold = 3.0  # Default drop threshold
                 st.session_state.model_type = "random_forest"  # Default model type
                 st.session_state.focus_on_drops = True  # Default to focus on drops
                 st.session_state.test_size = 0.2  # Default test size

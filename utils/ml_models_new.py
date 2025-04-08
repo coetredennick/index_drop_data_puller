@@ -690,7 +690,7 @@ def predict_returns(model_result, current_data, features):
                 'rmse': 5.0,  # Default uncertainty
                 'r2': 0.0,    # Default no correlation
                 'model_type': model_result.get('model_type', 'fallback'),
-                'target_period': target_column.replace('Fwd_Ret_', '') if 'Fwd_Ret_' in target_column else '1M'
+                'target_period': '1M'  # Default to 1 month
             }
         }
 
