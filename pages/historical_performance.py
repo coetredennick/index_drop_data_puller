@@ -561,144 +561,121 @@ def show_historical_performance():
                 col_name = col.strip()
                 num_val = float(val.replace('%', '').replace(',', '')) if isinstance(val, str) else val
                 
-                if pd.notna(num_val) and not is_last_row:  # Skip coloring for the totals row
-                    if not is_total_col:  # Apply heatmap to all non-total columns
-                        # Different color schemes based on column type
-                        if col_name == 'VIX':
-                            # Smooth gradient for VIX from green (low volatility) to yellow to red (high volatility)
-                            # VIX ranges typically from 10 (very calm) to 80+ (extreme volatility)
-                            # Use a normalized scale where 10=0.0, 50=1.0
-                            
-                            # Calculate normalized position in the range 0.0-1.0
-                            norm_val = max(0.0, min(1.0, (num_val - 10) / 40.0))
-                            
-                            # Create gradient colors - going from blue-green (calm) to yellow to red (volatile)
-                            if norm_val < 0.5:  # First half of gradient: blue-green to yellow
-                                # Blue-green (0) to yellow (0.5)
-                                ratio = norm_val * 2  # Scale to 0-1 range for this half
-                                r = int(100 + 155 * ratio)  # 100 -> 255
-                                g = int(200 + 55 * ratio)   # 200 -> 255
-                                b = int(220 * (1 - ratio))  # 220 -> 0
-                            else:  # Second half: yellow to red
-                                # Yellow (0.5) to red (1.0)
-                                ratio = (norm_val - 0.5) * 2  # Scale to 0-1 range for this half
-                                r = 255
-                                g = int(255 * (1 - ratio))  # 255 -> 0
-                                b = 0
-                            
-                            cell_style += f"background-color:rgb({r},{g},{b}); "
-                            
-                            # Text color (black on lighter backgrounds, white on darker ones)
-                            text_color = "white" if (norm_val > 0.7) else "black"
-                            cell_style += f"color:{text_color}; font-weight:500; "
-                            
-                            # Add a small indicator of the value range
-                            if num_val < 15:
-                                cell_style += "border-left: 3px solid #88d8b0;" # Very low VIX indicator
-                            elif num_val > 30:
-                                cell_style += "border-left: 3px solid #ff5252;" # High VIX indicator
+                # Process only if we have a valid number and it's not the totals row or the totals column
+                if pd.notna(num_val) and not is_last_row and not is_total_col:
+                    # Default rgb values
+                    r, g, b = 255, 255, 255
+                    applied_color = False  # Flag to track if we've applied a color
+                    
+                    # Technical indicators: VIX, RSI, Volume with green-yellow-red gradient
+                    if col_name == 'VIX':
+                        # VIX normalization - typically ranges from 10-50
+                        # Low VIX (green) to high VIX (red)
+                        norm_val = max(0.0, min(1.0, (num_val - 10) / 40.0))
                         
-                        elif col_name == 'RSI':
-                            # Smooth gradient for RSI across the full 0-100 range
-                            # 0 = extremely oversold (deep blue)
-                            # 50 = neutral (white/light gray)
-                            # 100 = extremely overbought (deep red)
-                            
-                            # Calculate position in gradient
-                            norm_val = num_val / 100.0  # RSI is 0-100 scale
-                            
-                            # Create gradient colors
-                            if norm_val < 0.3:  # Oversold zone (0-30)
-                                # Deep blue to lighter blue
-                                intensity = 1.0 - (norm_val / 0.3)  # 1.0 at RSI=0, 0.0 at RSI=30
-                                r = int(65 + (150 * (1 - intensity)))
-                                g = int(105 + (100 * (1 - intensity)))
-                                b = int(225 - (50 * (1 - intensity)))
-                                
-                                # Add a blue border indicator for oversold
-                                cell_style += "border-left: 3px solid #3a86ff;"
-                                
-                            elif norm_val > 0.7:  # Overbought zone (70-100)
-                                # Light red to deep red
-                                intensity = (norm_val - 0.7) / 0.3  # 0.0 at RSI=70, 1.0 at RSI=100
-                                r = int(225 + (30 * intensity))
-                                g = int(120 - (80 * intensity))
-                                b = int(120 - (80 * intensity))
-                                
-                                # Add a red border indicator for overbought
-                                cell_style += "border-left: 3px solid #ff3333;"
-                                
-                            else:  # Neutral zone (30-70)
-                                # Balanced gradient from blue-white to white-red
-                                # Scale to 0-1 within 30-70 range
-                                scaled = (norm_val - 0.3) / 0.4
-                                
-                                if scaled < 0.5:  # 30-50 range (blue-tinted to white)
-                                    subrange = scaled * 2  # 0-1 in 30-50 range
-                                    r = int(175 + (80 * subrange))
-                                    g = int(190 + (65 * subrange))
-                                    b = int(230 + (25 * subrange))
-                                else:  # 50-70 range (white to red-tinted)
-                                    subrange = (scaled - 0.5) * 2  # 0-1 in 50-70 range
-                                    r = int(255)
-                                    g = int(255 - (135 * subrange))
-                                    b = int(255 - (135 * subrange))
-                            
-                            # Text color
-                            text_color = "white" if (norm_val < 0.2 or norm_val > 0.8) else "black"
-                            cell_style += f"background-color:rgb({r},{g},{b}); "
-                            cell_style += f"color:{text_color}; font-weight:500; "
+                        # Create common low-to-high gradient (green -> yellow -> red)
+                        if norm_val < 0.5:
+                            # Green to yellow (0-0.5)
+                            r = int(60 + 195 * norm_val * 2)  # 60 -> 255
+                            g = int(200 + 55 * norm_val * 2)  # 200 -> 255
+                            b = int(90 * (1 - norm_val * 2))  # 90 -> 0
+                        else:
+                            # Yellow to red (0.5-1.0)
+                            r = 255
+                            g = int(255 * (1 - (norm_val - 0.5) * 2))  # 255 -> 0
+                            b = 0
                         
-                        elif col_name == 'Volume':
-                            # Calculate a normalized volume range (typical S&P 500 volume range)
-                            # Assume normal volume range is between 1-10 billion for modern S&P
-                            vol_in_billions = num_val / 1000000000
-                            norm_vol = max(0.0, min(1.0, vol_in_billions / 5.0))  # Normalize 0-5B to 0-1 range
+                        # Add indicator for extreme values
+                        if norm_val < 0.2:  # Very low VIX
+                            cell_style += "border-left: 3px solid #228B22;"  # Forest Green
+                        elif norm_val > 0.8:  # Very high VIX
+                            cell_style += "border-left: 3px solid #8B0000;"  # Dark Red
                             
-                            # Create a smooth blue-purple gradient based on volume
-                            # Low volume (light blue) to high volume (deep indigo-purple)
-                            r = int(140 + (30 * (1 - norm_vol)))
-                            g = int(160 + (30 * (1 - norm_vol)))
-                            b = int(220 + (35 * norm_vol))
-                            
-                            cell_style += f"background-color:rgb({r},{g},{b}); "
-                            
-                            # Add a subtle border for exceptionally high or low volume
-                            if norm_vol > 0.8:
-                                cell_style += "border-left: 3px solid #6a4c93;" # High volume indicator
-                            elif norm_vol < 0.2:
-                                cell_style += "border-left: 3px solid #8ecae6;" # Low volume indicator
-                            
-                            # Text color - black works well for this color range
-                            text_color = "black"
-                            if norm_vol > 0.8:
-                                text_color = "white"  # White text on very deep backgrounds
-                                
-                            cell_style += f"color:{text_color}; font-weight:500; "
+                        applied_color = True
                         
-                        # Standard green-to-red heatmap for percentage returns
-                        elif '%' in col_name or 'Drop' in col_name:
-                            if num_val < 0:
-                                # Calculate intensity for negative values (red)
-                                intensity = min(abs(num_val) / 10.0, 1.0)  # Max intensity at -10% or lower
-                                # Create RGB components for a red background with varying intensity
-                                r = 255
-                                g = int(255 * (1 - intensity * 0.6))  # Keep some green to avoid pure red
-                                b = int(255 * (1 - intensity * 0.8))  # Less blue for more red appearance
-                                cell_style += f"background-color:rgb({r},{g},{b}); "
-                                # Add contrasting text color for better readability
-                                cell_style += "color:#000000; font-weight:500; "  # Black text
-                                
-                            elif num_val > 0:
-                                # Calculate intensity for positive values (green)
-                                intensity = min(abs(num_val) / 10.0, 1.0)  # Max intensity at +10% or higher
-                                # Create RGB components for a green background with varying intensity
-                                r = int(255 * (1 - intensity * 0.8))  # Less red for more green appearance
-                                g = 255
-                                b = int(255 * (1 - intensity * 0.6))  # Keep some blue to avoid pure green
-                                cell_style += f"background-color:rgb({r},{g},{b}); "
-                                # Add contrasting text color for better readability
-                                cell_style += "color:#000000; font-weight:500; "  # Black text
+                    elif col_name == 'RSI':
+                        # RSI normalization (0-100 scale)
+                        # For RSI we want a special gradient:
+                        # Green in middle (RSI=50, neutral), red at extremes (RSI=0 or RSI=100)
+                        
+                        # Calculate how far from neutral 50 the RSI is (0 at 50, 1.0 at 0 or 100)
+                        distance_from_middle = abs(num_val - 50) / 50.0
+                        
+                        # Create a gradient where middle (50) is green and extremes (0 or 100) are red
+                        if distance_from_middle < 0.5:  # Closer to neutral (30-70 range)
+                            # Green to yellow gradient as we move away from 50
+                            ratio = distance_from_middle * 2  # 0-1 scale
+                            r = int(60 + 195 * ratio)      # 60 -> 255
+                            g = int(200 + 55 * ratio)      # 200 -> 255
+                            b = int(90 * (1 - ratio))      # 90 -> 0
+                        else:  # Further from neutral (<30 or >70)
+                            # Yellow to red gradient
+                            ratio = (distance_from_middle - 0.5) * 2  # 0-1 scale
+                            r = 255
+                            g = int(255 * (1 - ratio))    # 255 -> 0
+                            b = 0
+                        
+                        # Add indicator for extreme values
+                        if num_val < 30:  # Oversold
+                            cell_style += "border-left: 3px solid #8B0000;"  # Dark Red (oversold)
+                        elif num_val > 70:  # Overbought
+                            cell_style += "border-left: 3px solid #8B0000;"  # Dark Red (overbought)
+                            
+                        applied_color = True
+                        
+                    elif col_name == 'Volume':
+                        # Volume normalization (standard S&P volume range)
+                        vol_in_billions = num_val / 1000000000
+                        norm_val = max(0.0, min(1.0, vol_in_billions / 5.0))  # Normalize to 0-1
+                        
+                        # Same green-yellow-red gradient for consistency
+                        if norm_val < 0.5:
+                            # Green to yellow gradient
+                            r = int(60 + 195 * norm_val * 2)  # 60 -> 255
+                            g = int(200 + 55 * norm_val * 2)  # 200 -> 255
+                            b = int(90 * (1 - norm_val * 2))  # 90 -> 0
+                        else:
+                            # Yellow to red gradient
+                            r = 255
+                            g = int(255 * (1 - (norm_val - 0.5) * 2))  # 255 -> 0
+                            b = 0
+                        
+                        # Add indicator for extreme values
+                        if norm_val < 0.2:  # Very low volume
+                            cell_style += "border-left: 3px solid #228B22;"  # Forest Green
+                        elif norm_val > 0.8:  # Very high volume
+                            cell_style += "border-left: 3px solid #8B0000;"  # Dark Red
+                            
+                        applied_color = True
+                        
+                    # Standard green-to-red gradient for percentage return columns    
+                    elif '%' in col_name or 'Drop' in col_name:
+                        if num_val < 0:
+                            # Calculate intensity for negative values (red)
+                            intensity = min(abs(num_val) / 10.0, 1.0)  # Max intensity at -10% or lower
+                            # Create RGB components for a red background with varying intensity
+                            r = 255
+                            g = int(255 * (1 - intensity * 0.6))  # Keep some green to avoid pure red
+                            b = int(255 * (1 - intensity * 0.8))  # Less blue for more red appearance
+                        elif num_val > 0:
+                            # Calculate intensity for positive values (green)
+                            intensity = min(abs(num_val) / 10.0, 1.0)  # Max intensity at +10% or higher
+                            # Create RGB components for a green background with varying intensity
+                            r = int(255 * (1 - intensity * 0.8))  # Less red for more green appearance
+                            g = 255
+                            b = int(255 * (1 - intensity * 0.6))  # Keep some blue to avoid pure green
+                            
+                        applied_color = True
+                    
+                    # Apply the color if we processed this column
+                    if applied_color:
+                        cell_style += f"background-color:rgb({r},{g},{b}); "
+                        
+                        # Set text color based on background brightness for readability
+                        brightness = (r * 299 + g * 587 + b * 114) / 1000  # Weighted luminance formula
+                        text_color = "white" if brightness < 140 else "black"
+                        cell_style += f"color:{text_color}; font-weight:500; "
+                        
             except (ValueError, AttributeError):
                 pass  # Not a number or empty, keep default styling
             
