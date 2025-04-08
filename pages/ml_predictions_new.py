@@ -238,48 +238,35 @@ def show_ml_predictions():
     
     # Get features for forecasting - using the same threshold from main settings
     with st.spinner("Generating multi-scenario forecast for all time periods..."):
-        # Debug diagnostics for troubleshooting
-        st.write("**Preparing forecast data and features...**")
-        data_debug_expander = st.expander("View Data & Features Details (for debugging)", expanded=False)
-        with data_debug_expander:
-            st.write(f"Data timeframe: {st.session_state.data.index[0]} to {st.session_state.data.index[-1]}")
-            st.write(f"Data shape: {st.session_state.data.shape}")
-            st.write(f"Drop threshold: {st.session_state.drop_threshold}")
+        # Create simpler features with more error handling
+        data = st.session_state.data.copy()
+        
+        # Make sure we have the bare minimum features
+        if 'Return' not in data.columns:
+            data['Return'] = data['Close'].pct_change() * 100
+                
+        if 'RSI_14' not in data.columns and len(data) > 14:
+            # Calculate a simple RSI
+            delta = data['Close'].diff()
+            gain = delta.where(delta > 0, 0)
+            loss = -delta.where(delta < 0, 0)
+            avg_gain = gain.rolling(window=14).mean()
+            avg_loss = loss.rolling(window=14).mean()
+            rs = avg_gain / avg_loss
+            data['RSI_14'] = 100 - (100 / (1 + rs))
+                
+        # Use a reduced feature set to avoid issues
+        simplified_features = ['Return']
+        
+        if 'RSI_14' in data.columns:
+            simplified_features.append('RSI_14')
             
-            # Create simpler features with more error handling
-            data = st.session_state.data.copy()
-            
-            # Make sure we have the bare minimum features
-            if 'Return' not in data.columns:
-                data['Return'] = data['Close'].pct_change() * 100
-                st.write("Added 'Return' column")
-                
-            if 'RSI_14' not in data.columns and len(data) > 14:
-                # Calculate a simple RSI
-                delta = data['Close'].diff()
-                gain = delta.where(delta > 0, 0)
-                loss = -delta.where(delta < 0, 0)
-                avg_gain = gain.rolling(window=14).mean()
-                avg_loss = loss.rolling(window=14).mean()
-                rs = avg_gain / avg_loss
-                data['RSI_14'] = 100 - (100 / (1 + rs))
-                st.write("Added 'RSI_14' column")
-                
-            # Use a reduced feature set to avoid issues
-            simplified_features = ['Return']
-            
-            if 'RSI_14' in data.columns:
-                simplified_features.append('RSI_14')
-                
-            if 'Volume_Ratio_10D' in data.columns:
-                simplified_features.append('Volume_Ratio_10D')
-            elif 'Volume' in data.columns:
-                # Create Volume_Ratio_10D if not available
-                data['Volume_Ratio_10D'] = data['Volume'] / data['Volume'].rolling(10).mean()
-                simplified_features.append('Volume_Ratio_10D')
-                st.write("Added 'Volume_Ratio_10D' column")
-                
-            st.write(f"Using simplified feature set: {simplified_features}")
+        if 'Volume_Ratio_10D' in data.columns:
+            simplified_features.append('Volume_Ratio_10D')
+        elif 'Volume' in data.columns:
+            # Create Volume_Ratio_10D if not available
+            data['Volume_Ratio_10D'] = data['Volume'] / data['Volume'].rolling(10).mean()
+            simplified_features.append('Volume_Ratio_10D')
         
         try:
             # Create multi-scenario forecast with simplified feature set
@@ -313,13 +300,7 @@ def show_ml_predictions():
             </div>
             """, unsafe_allow_html=True)
         except Exception as e:
-            import traceback
-            st.error(f"Error creating multi-scenario forecast: {str(e)}")
-            
-            error_details = st.expander("Show detailed error information (technical)")
-            with error_details:
-                st.code(traceback.format_exc())
-                
+            st.error("Could not generate multi-scenario forecast. Please use the model training controls below.")
             st.info("Falling back to individual ML model training approach. Please train a model using the button above.")
             
     # Get the appropriate model from session state for individual predictions
@@ -468,20 +449,8 @@ def show_ml_predictions():
             """, unsafe_allow_html=True)
             
         else:
-            # Display error information if prediction failed
-            error_message = prediction_result.get('error', 'Unknown error in prediction')
-            
-            st.warning(f"Unable to make prediction with current market data: {error_message}")
-            
-            # Show more detailed error information with technical details in expandable section
-            with st.expander("Prediction Error Details"):
-                missing_features = prediction_result.get('missing_features', [])
-                if missing_features:
-                    st.write("##### Missing Features:")
-                    st.write(", ".join(missing_features[:10]) + ("..." if len(missing_features) > 10 else ""))
-                
-                if 'traceback' in prediction_result:
-                    st.code(prediction_result['traceback'], language="python")
+            # Display simplified error message
+            st.warning("Unable to make prediction with current market data. Try adjusting the settings or training a new model.")
             
         # Add prediction analysis chart
         prediction_chart = create_prediction_chart(model_result, height=400)
