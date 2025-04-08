@@ -575,7 +575,9 @@ def show_historical_performance():
                         
                         # Apply a more exponential scaling to increase contrast
                         # This will make higher VIX values more red more quickly
-                        vix_norm = max(0.0, min(1.0, ((num_val - 10) / 40.0) ** 1.5))
+                        # First make sure we have a non-negative value to avoid complex numbers
+                        vix_base = max(0.0, (num_val - 10) / 40.0)
+                        vix_norm = vix_base ** 1.5  # Now safe to raise to power
                         
                         # Create common green-yellow-red gradient
                         # Reverse the norm_val calculation so 1.0 = highest VIX (most extreme)
