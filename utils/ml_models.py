@@ -8,7 +8,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
+def prepare_features(data, focus_on_drops=True, drop_threshold=-0.1):
     """
     Prepare features for machine learning models
     
@@ -231,7 +231,7 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
         # If filtering results in too few data points, use a more relaxed threshold
         if len(filtered_df) < 50:  # Minimum number for reliable training
             print(f"Warning: Too few data points ({len(filtered_df)}) with threshold {drop_threshold}%. Using a more relaxed threshold.")
-            relaxed_threshold = max(drop_threshold * 0.5, -1.0)  # More relaxed threshold
+            relaxed_threshold = max(drop_threshold * 0.5, -0.05)  # More relaxed threshold
             drop_condition = (
                 (df['Return'] <= relaxed_threshold) | 
                 (df['Return'].shift(1) <= relaxed_threshold) | 

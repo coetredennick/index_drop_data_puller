@@ -8,7 +8,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
+def prepare_features(data, focus_on_drops=True, drop_threshold=-0.1):
     """
     Prepare features for machine learning models with emphasis on post-drop recovery periods
     Enhanced to better utilize historical drop events and subsequent market behavior

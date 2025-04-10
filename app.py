@@ -173,7 +173,7 @@ st.markdown("""
 
 # Initialize session state for settings
 if 'drop_threshold' not in st.session_state:
-    st.session_state.drop_threshold = 3.0
+    st.session_state.drop_threshold = 0.1
 if 'consecutive_days' not in st.session_state:
     st.session_state.consecutive_days = 1
 if 'date_range' not in st.session_state:
