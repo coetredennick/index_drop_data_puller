@@ -1958,11 +1958,14 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
                 tickprefix='$',
             ),
             legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
+                orientation="v",
+                yanchor="top",
+                y=0.99,
+                xanchor="right", 
+                x=0.99,
+                bgcolor="rgba(255, 255, 255, 0.8)",
+                bordercolor="rgba(0, 0, 0, 0.2)",
+                borderwidth=1
             ),
             margin=dict(l=40, r=40, t=50, b=60),
         )
@@ -1981,6 +1984,36 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
             )
         )
         
+        # Add a concise summary of percentage changes to the top right corner
+        summary_text = "Forecasted % Changes:<br>"
+        for period in ['1W', '1M', '3M', '1Y']:
+            for scenario, color in [('Bear', 'red'), ('Base', 'black'), ('Bull', 'green')]:
+                # Find relevant horizon
+                for h in horizon_markers:
+                    if h['period'] == period:
+                        change = h['changes'][scenario]
+                        # Add formatted percentage to the summary
+                        summary_text += f"<span style='color:{color};'>{period} {scenario}: {change:+.1f}%</span><br>"
+        
+        # Add the summary box in the top right
+        fig.add_annotation(
+            text=summary_text,
+            x=0.99,
+            y=0.99,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+            font=dict(size=11),
+            align="right",
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor="rgba(0, 0, 0, 0.2)",
+            borderwidth=1,
+            borderpad=5,
+            xanchor="right",
+            yanchor="top"
+        )
+        
+        # Add the methodology note at the bottom
         fig.add_annotation(
             text=f"Scenarios based on historical returns | Bear Case: 20th percentile | Base Case: median | Bull Case: 80th percentile",
             xref="paper",
