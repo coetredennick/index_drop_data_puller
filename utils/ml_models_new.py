@@ -1984,33 +1984,49 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
             )
         )
         
-        # Create a visual card-style legend for better visualization
-        # Use HTML/CSS styling to create a more visual card appearance
+        # Create a completely redesigned table-style legend that shows all scenarios at once in a grid
+        # Create a sleek modern table design for forecasted returns
         summary_text = """
         <div style="
-            padding: 10px; 
-            background: linear-gradient(135deg, #f5f7fa 0%, #e5e9f2 100%);
-            border-radius: 10px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            border: 1px solid #d1d9e6;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
             font-family: Arial, sans-serif;
+            border: 1px solid #e0e0e0;
+            overflow: hidden;
+            min-width: 280px;
         ">
             <div style="
-                text-align: center; 
-                font-weight: 600; 
-                font-size: 16px; 
-                padding-bottom: 8px; 
-                margin-bottom: 8px; 
-                border-bottom: 2px solid #cbd3e1;
-                color: #2c3e50;
+                background-color: #2c3e50;
+                color: white;
+                text-align: center;
+                padding: 10px;
+                font-weight: bold;
+                font-size: 15px;
             ">
-                FORECASTED RETURNS
+                S&P 500 FORECAST SCENARIOS
+            </div>
+            
+            <!-- Table Header Row -->
+            <div style="
+                display: grid;
+                grid-template-columns: 70px repeat(3, 1fr);
+                background-color: #f5f7fa;
+                border-bottom: 2px solid #e0e0e0;
+                font-weight: bold;
+                text-align: center;
+                padding: 6px 0;
+            ">
+                <div style="padding: 5px; color: #7f8c8d;">Period</div>
+                <div style="padding: 5px; color: #c0392b;">Bear</div>
+                <div style="padding: 5px; color: #2c3e50;">Base</div>
+                <div style="padding: 5px; color: #27ae60;">Bull</div>
             </div>
         """
         
-        # Group by time period for better organization
+        # Add all time periods as rows in the table
         for period in ['1W', '1M', '3M', '1Y']:
-            # Find the relevant horizon
+            # Find the relevant horizon data
             horizon_data = None
             for h in horizon_markers:
                 if h['period'] == period:
@@ -2018,102 +2034,68 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
                     break
             
             if horizon_data:
-                # Get all scenarios for this period
-                bear_change = horizon_data['changes']['Bear']
+                # Get scenarios for this time period
+                bear_change = horizon_data['changes']['Bear'] 
                 base_change = horizon_data['changes']['Base']
                 bull_change = horizon_data['changes']['Bull']
                 
-                # Colors for the period header
-                period_colors = {
-                    '1W': '#3498db',
-                    '1M': '#2980b9',
-                    '3M': '#2c3e50',
-                    '1Y': '#1e293b'
+                # Determine colors based on positive/negative values
+                bear_text_color = "#c0392b" if bear_change < 0 else "#27ae60"
+                base_text_color = "#c0392b" if base_change < 0 else "#27ae60"
+                bull_text_color = "#c0392b" if bull_change < 0 else "#27ae60"
+                
+                # Row background colors alternate for better readability
+                row_bg = "#ffffff" if ['1W', '3M'].count(period) > 0 else "#f9fafb"
+                
+                # Special styling for period column
+                period_style = {
+                    '1W': "background-color: #e3f2fd; color: #1565c0;",  # Light blue
+                    '1M': "background-color: #e8f5e9; color: #2e7d32;",  # Light green
+                    '3M': "background-color: #fff3e0; color: #e65100;",  # Light orange
+                    '1Y': "background-color: #fce4ec; color: #c2185b;"   # Light pink
                 }
                 
-                # Add period header with custom styling
+                # Add table row
                 summary_text += f"""
                 <div style="
-                    background-color: {period_colors.get(period, '#3498db')}; 
-                    color: white; 
-                    padding: 4px 6px; 
-                    border-radius: 6px; 
-                    margin-top: 5px;
-                    margin-bottom: 5px;
-                    font-weight: bold;
+                    display: grid;
+                    grid-template-columns: 70px repeat(3, 1fr);
+                    background-color: {row_bg};
+                    border-bottom: 1px solid #e0e0e0;
                     text-align: center;
                 ">
-                    {period} FORECAST
+                    <div style="
+                        padding: 8px 5px; 
+                        font-weight: bold; 
+                        {period_style.get(period, "")}
+                    ">{period}</div>
+                    <div style="padding: 8px 5px; font-weight: bold; color: {bear_text_color};">{bear_change:+.1f}%</div>
+                    <div style="
+                        padding: 8px 5px; 
+                        font-weight: bold; 
+                        color: {base_text_color};
+                        font-size: 16px;
+                        border-left: 1px solid #e0e0e0;
+                        border-right: 1px solid #e0e0e0;
+                    ">{base_change:+.1f}%</div>
+                    <div style="padding: 8px 5px; font-weight: bold; color: {bull_text_color};">{bull_change:+.1f}%</div>
                 </div>
-                """
-                
-                # Card-style scenario boxes
-                # Bear case card
-                bear_color = "#e74c3c" if bear_change < 0 else "#27ae60"
-                bear_bg = "rgba(231, 76, 60, 0.1)" if bear_change < 0 else "rgba(39, 174, 96, 0.1)"
-                
-                summary_text += f"""
-                <div style="
-                    display: flex; 
-                    justify-content: space-between; 
-                    align-items: center; 
-                    padding: 4px 8px; 
-                    background-color: {bear_bg}; 
-                    border-radius: 4px;
-                    margin-bottom: 4px;
-                ">
-                    <span style="font-weight: bold; color: #7f8c8d;">Bear:</span>
-                    <span style="font-weight: bold; color: {bear_color}; font-size: 15px;">{bear_change:+.1f}%</span>
-                </div>
-                """
-                
-                # Base case card
-                base_color = "#e74c3c" if base_change < 0 else "#27ae60"
-                base_bg = "rgba(231, 76, 60, 0.1)" if base_change < 0 else "rgba(39, 174, 96, 0.1)"
-                
-                summary_text += f"""
-                <div style="
-                    display: flex; 
-                    justify-content: space-between; 
-                    align-items: center; 
-                    padding: 4px 8px; 
-                    background-color: {base_bg}; 
-                    border-radius: 4px;
-                    margin-bottom: 4px;
-                    border: 1px solid rgba(0,0,0,0.1);
-                ">
-                    <span style="font-weight: bold; color: #2c3e50;">Base:</span>
-                    <span style="font-weight: bold; color: {base_color}; font-size: 16px;">{base_change:+.1f}%</span>
-                </div>
-                """
-                
-                # Bull case card
-                bull_color = "#e74c3c" if bull_change < 0 else "#27ae60"
-                bull_bg = "rgba(231, 76, 60, 0.1)" if bull_change < 0 else "rgba(39, 174, 96, 0.1)"
-                
-                summary_text += f"""
-                <div style="
-                    display: flex; 
-                    justify-content: space-between; 
-                    align-items: center; 
-                    padding: 4px 8px; 
-                    background-color: {bull_bg}; 
-                    border-radius: 4px;
-                    margin-bottom: 4px;
-                ">
-                    <span style="font-weight: bold; color: #7f8c8d;">Bull:</span>
-                    <span style="font-weight: bold; color: {bull_color}; font-size: 15px;">{bull_change:+.1f}%</span>
-                </div>
-                """
-            
-            # Add space between time periods
-            if period != '1Y':  # Don't add divider after the last period
-                summary_text += """
-                <div style="height: 1px; background-color: #e9edf2; margin: 5px 0;"></div>
                 """
         
-        # Close the main container div
-        summary_text += "</div>"
+        # Add a footer with explanation
+        summary_text += """
+            <div style="
+                padding: 6px;
+                background-color: #f5f7fa;
+                color: #7f8c8d;
+                font-size: 10px;
+                text-align: center;
+                border-top: 1px solid #e0e0e0;
+            ">
+                Bear: 20th percentile | Base: Median | Bull: 80th percentile
+            </div>
+        </div>
+        """
         
         # Add the enhanced visual card legend box in the top right
         fig.add_annotation(
