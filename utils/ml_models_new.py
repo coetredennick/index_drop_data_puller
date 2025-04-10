@@ -1884,29 +1884,25 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
                 )
             )
             
-            # Add annotations for each scenario at this horizon
-            y_offset = 40
+            # Instead of individual annotations, just add small marker points
             for scenario in scenario_lines.keys():
                 price = horizon['prices'][scenario]
                 change = horizon['changes'][scenario]
                 color = "red" if change < 0 else "green"
                 
-                # Offset each scenario label vertically
-                y_offset -= 20
-                
-                fig.add_annotation(
-                    x=horizon['date'],
-                    y=price,
-                    text=f"{horizon['period']} {scenario}: ${price:.2f} ({change:+.1f}%)",
-                    showarrow=True,
-                    arrowhead=2,
-                    arrowsize=1,
-                    arrowwidth=1.5,
-                    ax=40,
-                    ay=y_offset,
-                    font=dict(
-                        color=color,
-                        size=10
+                # Add a small dot at each scenario price point
+                fig.add_trace(
+                    go.Scatter(
+                        x=[horizon['date']],
+                        y=[price],
+                        mode='markers',
+                        marker=dict(
+                            color=color,
+                            size=8,
+                            symbol='circle'
+                        ),
+                        showlegend=False,
+                        hovertemplate=f"{horizon['period']} {scenario}<br>Price: ${price:.2f}<br>Change: {change:+.1f}%<extra></extra>"
                     )
                 )
         
