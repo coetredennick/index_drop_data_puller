@@ -620,6 +620,7 @@ def train_model(data, features, target_column, model_type='random_forest', test_
 def predict_returns(model_result, current_data, features):
     """
     Make predictions using the trained model for current market conditions with enhanced robustness
+    Enhanced to better leverage historical drop events and recovery patterns
     
     Parameters:
     -----------
@@ -653,6 +654,34 @@ def predict_returns(model_result, current_data, features):
             'prediction_date': None
         }
     
+    # Check if we're working with a drop-focused model (with recovery patterns)
+    is_drop_focused = False
+    model_metadata = model_result.get('metadata', {})
+    if model_metadata.get('is_drop_focused', False):
+        is_drop_focused = True
+        print(f"Using specialized drop event recovery model for {model_metadata.get('target_period', 'unknown')} prediction")
+    
+    # Check for recent market drop conditions in current market data
+    recent_drop_detected = False
+    significant_drop_threshold = -3.0  # Standard 3% threshold
+    recent_return = 0
+    
+    if 'Return' in current_data.columns and len(current_data) > 0:
+        # Check most recent return or cumulative return over past 2-3 days
+        recent_return = current_data['Return'].iloc[-1]
+        
+        # Also check if we have consecutive negative days (smaller drops that add up)
+        if len(current_data) >= 3:
+            last_3_days_returns = current_data['Return'].iloc[-3:].values
+            cumulative_3d_return = sum([r for r in last_3_days_returns if r < 0])
+            
+            if recent_return <= significant_drop_threshold or cumulative_3d_return <= significant_drop_threshold:
+                recent_drop_detected = True
+                print(f"Detected significant market drop: latest {recent_return:.2f}%, 3-day cumulative negative {cumulative_3d_return:.2f}%")
+        elif recent_return <= significant_drop_threshold:
+            recent_drop_detected = True
+            print(f"Detected significant market drop: {recent_return:.2f}%")
+    
     # Check for missing features and add defaults if needed
     missing_features = [f for f in features if f not in current_data.columns]
     if missing_features:
@@ -662,27 +691,60 @@ def predict_returns(model_result, current_data, features):
         temp_data = current_data.copy()
         
         # Add default values for missing features based on feature naming patterns
+        # and market conditions (different defaults if we detected a drop)
         for feature in missing_features:
             if 'RSI' in feature:
-                temp_data[feature] = 50.0  # Neutral RSI
+                # Use oversold RSI value if we detected a drop
+                temp_data[feature] = 30.0 if recent_drop_detected else 50.0
             elif 'MACD' in feature:
-                temp_data[feature] = 0.0   # Neutral MACD
+                # Use negative MACD if we detected a drop
+                temp_data[feature] = -1.0 if recent_drop_detected else 0.0
             elif 'BB' in feature:
                 if 'BBP' in feature:  # Bollinger Band Position
-                    temp_data[feature] = 0.5  # Middle of the bands
+                    # Lower band position if we detected a drop
+                    temp_data[feature] = 0.2 if recent_drop_detected else 0.5
                 else:
                     temp_data[feature] = current_data['Close'].iloc[-1]  # Use close price as baseline
             elif 'VIX' in feature:
-                temp_data[feature] = 20.0  # Average historical VIX
+                # Elevated VIX during market drops
+                temp_data[feature] = 30.0 if recent_drop_detected else 20.0
             elif 'Volume' in feature:
                 if 'Ratio' in feature:
-                    temp_data[feature] = 1.0  # Neutral volume ratio
+                    # Higher volume ratio during market drops
+                    temp_data[feature] = 1.5 if recent_drop_detected else 1.0
                 else:
                     temp_data[feature] = 1000000  # Arbitrary volume number
             elif 'ATR' in feature:
-                temp_data[feature] = 1.0  # Moderate volatility
+                # Higher volatility during market drops
+                temp_data[feature] = 2.0 if recent_drop_detected else 1.0
             elif 'Decline' in feature or 'Drawdown' in feature:
-                temp_data[feature] = 0.0  # No decline
+                # For drop-related features, use values based on detected market conditions
+                if recent_drop_detected:
+                    if 'Drawdown_From_Peak_Pct' in feature:
+                        temp_data[feature] = recent_return
+                    elif 'Decline_Rate_Per_Day' in feature:
+                        temp_data[feature] = abs(recent_return)
+                    elif 'Days_Since_Peak' in feature:
+                        temp_data[feature] = 1.0  # Assume the drop just happened
+                    else:
+                        temp_data[feature] = 1.0
+                else:
+                    temp_data[feature] = 0.0  # No decline
+            elif 'Recovery' in feature:
+                # For recovery features, use historical patterns if available
+                if is_drop_focused and model_metadata:
+                    if 'median_1d_recovery' in model_metadata and feature == 'Recovery_1d':
+                        temp_data[feature] = model_metadata['median_1d_recovery']
+                    elif 'median_5d_recovery' in model_metadata and feature == 'Recovery_5d':
+                        temp_data[feature] = model_metadata['median_5d_recovery']
+                    else:
+                        # Small positive default
+                        temp_data[feature] = 0.5
+                else:
+                    temp_data[feature] = 0.5  # Default mild recovery
+            elif 'Consec_Drop' in feature:
+                # Flag consecutive drops if detected
+                temp_data[feature] = 1 if recent_drop_detected and len(current_data) >= 2 and current_data['Return'].iloc[-2] <= 0 else 0
             else:
                 temp_data[feature] = 0.0  # Default to zero for other features
         
@@ -1171,6 +1233,7 @@ def create_prediction_chart(model_result, title="Model Predictions vs Actual Ret
 def create_feature_importance_chart(model_result, title="Feature Importance", height=400):
     """
     Create a chart showing feature importance from the model
+    Enhanced to highlight recovery-related features for better analysis of drop events
     
     Parameters:
     -----------
@@ -1184,7 +1247,7 @@ def create_feature_importance_chart(model_result, title="Feature Importance", he
     Returns:
     --------
     plotly.graph_objects.Figure
-        Feature importance chart
+        Feature importance chart with highlighted recovery features
     """
     # Create the figure
     fig = go.Figure()
@@ -1228,30 +1291,136 @@ def create_feature_importance_chart(model_result, title="Feature Importance", he
         # Sort by importance
         importance_df = importance_df.sort_values('importance', ascending=True)
         
-        # Create the horizontal bar chart
+        # Take top 20 features for better visualization
+        if len(importance_df) > 20:
+            importance_df = importance_df.tail(20)
+        
+        # Check if this is a drop-focused model with recovery metrics
+        is_drop_focused = False
+        model_metadata = model_result.get('metadata', {})
+        if model_metadata.get('is_drop_focused', False):
+            is_drop_focused = True
+            print(f"Creating feature importance chart for drop-focused model")
+        
+        # Create feature categorization for color coding
+        feature_categories = []
+        feature_colors = []
+        
+        # Define category mapping
+        category_colors = {
+            'Recovery': 'rgba(0, 180, 0, 0.9)',       # Green for recovery features
+            'Decline': 'rgba(220, 0, 0, 0.9)',        # Red for decline/drop features
+            'Volatility': 'rgba(148, 0, 211, 0.9)',   # Purple for volatility features
+            'Volume': 'rgba(0, 0, 220, 0.9)',         # Blue for volume features
+            'Indicator': 'rgba(255, 140, 0, 0.9)',    # Orange for technical indicators
+            'Price': 'rgba(100, 100, 100, 0.9)',      # Grey for price features
+            'Other': 'rgba(50, 171, 96, 0.7)'         # Default green-blue for others
+        }
+        
+        # Categorize each feature
+        for feature in importance_df['feature']:
+            # Recovery features
+            if any(kw in feature for kw in ['Recovery', 'Days_To_Recovery']):
+                feature_categories.append('Recovery')
+                feature_colors.append(category_colors['Recovery'])
+            # Decline/Drawdown features
+            elif any(kw in feature for kw in ['Decline', 'Drawdown', 'Drop', 'Days_Since_Peak']):
+                feature_categories.append('Decline')
+                feature_colors.append(category_colors['Decline'])
+            # Volatility features
+            elif any(kw in feature for kw in ['VIX', 'ATR', 'Volatility']):
+                feature_categories.append('Volatility')
+                feature_colors.append(category_colors['Volatility'])
+            # Volume features
+            elif any(kw in feature for kw in ['Volume', 'OBV', 'VWAP']):
+                feature_categories.append('Volume')
+                feature_colors.append(category_colors['Volume'])
+            # Technical indicator features
+            elif any(kw in feature for kw in ['RSI', 'STOCH', 'MACD', 'BB']):
+                feature_categories.append('Indicator')
+                feature_colors.append(category_colors['Indicator'])
+            # Price features
+            elif any(kw in feature for kw in ['Close', 'Open', 'High', 'Low', 'Return']):
+                feature_categories.append('Price')
+                feature_colors.append(category_colors['Price'])
+            # Other features
+            else:
+                feature_categories.append('Other')
+                feature_colors.append(category_colors['Other'])
+        
+        # Add categories to the dataframe for hover text
+        importance_df['category'] = feature_categories
+        
+        # Create the horizontal bar chart with color-coded feature categories
         fig.add_trace(
             go.Bar(
                 y=importance_df['feature'],
                 x=importance_df['importance'],
                 orientation='h',
                 marker=dict(
-                    color=importance_df['importance'],
-                    colorscale='Viridis',
-                    colorbar=dict(title="Importance")
-                )
+                    color=feature_colors,
+                    line=dict(
+                        color='rgba(0, 0, 0, 0.5)',
+                        width=1
+                    )
+                ),
+                hovertemplate='<b>%{y}</b><br>Category: %{text}<br>Importance: %{x:.4f}<extra></extra>',
+                text=importance_df['category']
             )
         )
         
-        # Update layout
+        # Create a more descriptive title and dynamic height
         model_type = model_result.get('model_type', 'Model').capitalize()
+        target_column = model_result.get('target_column', '')
+        target_period = target_column.replace('Fwd_Ret_', '') if 'Fwd_Ret_' in target_column else ''
+        
+        # Create title with more context about the model
+        chart_title = f"{title} ({model_type})"
+        if target_period:
+            chart_title = f"{title} ({model_type} for {target_period} Returns)"
+            
+        # If drop-focused model, highlight that in the title
+        if is_drop_focused:
+            chart_title = f"Market Drop {title} ({model_type} for {target_period} Returns)"
+        
+        # Adjust height based on number of features
+        adj_height = max(height, 100 + 20 * len(importance_df))
+        
+        # Update layout
         fig.update_layout(
-            title=f"{title} ({model_type})",
+            title=chart_title,
             xaxis_title="Importance",
             yaxis_title="Feature",
-            height=height,
+            height=adj_height,
             template="plotly_white",
-            margin=dict(l=100, r=40, t=50, b=40),
+            margin=dict(l=150, r=40, t=50, b=40),
         )
+        
+        # Add legend for feature categories
+        annotations = []
+        
+        # Only add the legend if we have enough features to warrant it (save space on small charts)
+        if len(importance_df) >= 8:
+            # Find unique categories in our data 
+            unique_categories = sorted(set(feature_categories))
+            
+            # Add annotation for each category
+            for i, category in enumerate(unique_categories):
+                annotations.append(dict(
+                    x=0.98,
+                    y=0.97 - (i * 0.045),
+                    xref="paper",
+                    yref="paper",
+                    text=f"{category} Features",
+                    showarrow=False,
+                    font=dict(
+                        color=category_colors[category],
+                        size=10
+                    ),
+                    align="right"
+                ))
+            
+            fig.update_layout(annotations=annotations)
         
         return fig
     
