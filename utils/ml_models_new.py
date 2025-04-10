@@ -1984,18 +1984,43 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
             )
         )
         
-        # Add a concise summary of percentage changes to the top right corner
-        summary_text = "Forecasted % Changes:<br>"
-        for period in ['1W', '1M', '3M', '1Y']:
-            for scenario, color in [('Bear', 'red'), ('Base', 'black'), ('Bull', 'green')]:
-                # Find relevant horizon
-                for h in horizon_markers:
-                    if h['period'] == period:
-                        change = h['changes'][scenario]
-                        # Add formatted percentage to the summary
-                        summary_text += f"<span style='color:{color};'>{period} {scenario}: {change:+.1f}%</span><br>"
+        # Create a clear, structured legend showing percentage changes
+        # We'll format it as a table with clear sections by time period
+        summary_text = "<b>FORECASTED RETURNS</b><br><br>"
         
-        # Add the summary box in the top right
+        # Group by time period for better organization
+        for period in ['1W', '1M', '3M', '1Y']:
+            summary_text += f"<b>{period} FORECAST:</b><br>"
+            
+            # Find the relevant horizon
+            horizon_data = None
+            for h in horizon_markers:
+                if h['period'] == period:
+                    horizon_data = h
+                    break
+            
+            if horizon_data:
+                # Get all scenarios for this period
+                bear_change = horizon_data['changes']['Bear']
+                base_change = horizon_data['changes']['Base']
+                bull_change = horizon_data['changes']['Bull']
+                
+                # Add Bear case with bold red text for negative, green for positive
+                bear_color = "darkred" if bear_change < 0 else "darkgreen"
+                summary_text += f"Bear: <b style='color:{bear_color}; font-size:13px'>{bear_change:+.1f}%</b><br>"
+                
+                # Add Base case (median) with bold text
+                base_color = "darkred" if base_change < 0 else "darkgreen"
+                summary_text += f"Base: <b style='color:{base_color}; font-size:14px'>{base_change:+.1f}%</b><br>"
+                
+                # Add Bull case with bold green text for positive, red for negative
+                bull_color = "darkred" if bull_change < 0 else "darkgreen"
+                summary_text += f"Bull: <b style='color:{bull_color}; font-size:13px'>{bull_change:+.1f}%</b><br>"
+            
+            # Add space between time periods
+            summary_text += "<br>"
+        
+        # Add the enhanced legend box in the top right
         fig.add_annotation(
             text=summary_text,
             x=0.99,
@@ -2003,12 +2028,12 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
             xref="paper",
             yref="paper",
             showarrow=False,
-            font=dict(size=11),
+            font=dict(size=12),
             align="right",
-            bgcolor="rgba(255, 255, 255, 0.8)",
-            bordercolor="rgba(0, 0, 0, 0.2)",
-            borderwidth=1,
-            borderpad=5,
+            bgcolor="rgba(255, 255, 255, 0.95)",  # More opaque background
+            bordercolor="rgba(0, 0, 0, 0.4)",     # Darker border
+            borderwidth=2,                        # Thicker border
+            borderpad=8,                          # More padding
             xanchor="right",
             yanchor="top"
         )
