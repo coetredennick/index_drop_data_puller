@@ -11,6 +11,7 @@ from plotly.subplots import make_subplots
 def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
     """
     Prepare features for machine learning models with emphasis on post-drop recovery periods
+    Enhanced to better utilize historical drop events and subsequent market behavior
     
     Parameters:
     -----------
@@ -67,8 +68,11 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
     if 'Return' not in df.columns and 'Close' in df.columns:
         df['Return'] = df['Close'].pct_change() * 100
     
-    # Create forward return columns for different time periods
+    # Create forward return columns for different time periods including new 3D
     periods = {
+        '1D': 1,      # 1 day
+        '2D': 2,      # 2 days
+        '3D': 3,      # 3 days
         '1W': 5,      # 1 week (5 trading days)
         '1M': 21,     # 1 month (21 trading days)
         '3M': 63,     # 3 months (63 trading days)
@@ -103,10 +107,18 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
     
     # If focusing on market drops and their recovery periods
     if focus_on_drops:
-        # First identify days with drops exceeding the threshold
-        drop_days = df[df['Return'] <= drop_threshold].index
+        # Identify consecutive drop days (2 or more days with significant drops)
+        df['Consec_Drop'] = 0
+        for i in range(1, len(df)):
+            if df['Return'].iloc[i] <= drop_threshold and df['Return'].iloc[i-1] <= drop_threshold:
+                df.iloc[i, df.columns.get_loc('Consec_Drop')] = 1
+                df.iloc[i-1, df.columns.get_loc('Consec_Drop')] = 1
         
-        # For each drop day, include the 30 days after it (recovery period)
+        # First identify days with drops exceeding the threshold, including consecutive drops
+        drop_days = df[(df['Return'] <= drop_threshold) | (df['Consec_Drop'] == 1)].index
+        
+        # For each drop day, include more days after it (extended recovery period)
+        # Use a longer window for studying recovery patterns (60 days instead of 30)
         recovery_periods = []
         for drop_idx in drop_days:
             # Get position of this drop day
@@ -117,8 +129,8 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
                 # Standard case with RangeIndex
                 drop_pos = df.index.get_loc(drop_idx)
                 
-            # Add the drop day and next 30 days (or as many as available)
-            max_pos = min(drop_pos + 30, len(df) - 1)
+            # Add the drop day and next 60 days (or as many as available)
+            max_pos = min(drop_pos + 60, len(df) - 1)
             for i in range(drop_pos, max_pos + 1):
                 recovery_periods.append(df.index[i])
         
@@ -373,6 +385,7 @@ def prepare_features(data, focus_on_drops=True, drop_threshold=-3.0):
 def train_model(data, features, target_column, model_type='random_forest', test_size=0.2):
     """
     Train a machine learning model to predict future returns
+    Enhanced to better use historical market drop events and recovery data
     
     Parameters:
     -----------
@@ -404,18 +417,24 @@ def train_model(data, features, target_column, model_type='random_forest', test_
     
     # Prepare data
     try:
+        # Check if we're looking at a dataset focused on market drops
+        is_drop_focused = False
+        if 'Recovery_1d' in data.columns or 'Days_To_Recovery' in data.columns or 'Consec_Drop' in data.columns:
+            is_drop_focused = True
+            print(f"Detected dataset focused on market drops for {target_column} prediction")
+        
         # Only keep rows with valid data for all required columns
         required_columns = features + [target_column]
         valid_data = data[required_columns].dropna()
         
         # For historical drop analysis, we may have fewer data points due to the rarity of drop events
-        # Adjust the minimum required rows based on the data context
-        min_required_rows = 3  # Further reduced to handle extremely rare drop events
+        # Set a dynamic minimum based on whether this is drop-focused data
+        min_required_rows = 3 if is_drop_focused else 5
         
         if len(valid_data) < min_required_rows:
             print(f"WARNING: Only {len(valid_data)} valid data points found after filtering - minimum {min_required_rows} required")
             return {'success': False, 'error': f'Insufficient data after removing invalid rows ({len(valid_data)} valid rows found, minimum {min_required_rows} required)'}
-            
+        
         # Calculate and print the actual test size based on data
         actual_test_samples = max(1, int(len(valid_data) * test_size))
         print(f"Data split: {len(valid_data) - actual_test_samples} training samples, {actual_test_samples} test samples")
@@ -430,13 +449,54 @@ def train_model(data, features, target_column, model_type='random_forest', test_
         X = valid_data[features]
         y = valid_data[target_column]
         
-        # Split into training and testing sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        # Determine if we're predicting a short-term or long-term target
+        is_short_term = False
+        if target_column in ['Fwd_Ret_1D', 'Fwd_Ret_2D', 'Fwd_Ret_3D', 'Fwd_Ret_1W']:
+            is_short_term = True
+            print(f"Training model for short-term prediction: {target_column}")
         
-        # Initialize the right model type
+        # Split into training and testing sets with consideration for time series data
+        # For short-term predictions with market drops, we want to ensure chronological integrity
+        if is_drop_focused and is_short_term and isinstance(data.index, pd.DatetimeIndex):
+            # For time-sensitive drop recovery models, use the most recent data for testing
+            # This better represents how the model will be used in live trading
+            data_sorted = valid_data.sort_index()
+            split_idx = int(len(data_sorted) * (1 - test_size))
+            
+            X_train = data_sorted.iloc[:split_idx][features]
+            X_test = data_sorted.iloc[split_idx:][features]
+            y_train = data_sorted.iloc[:split_idx][target_column]
+            y_test = data_sorted.iloc[split_idx:][target_column]
+            
+            print(f"Using chronological train-test split for time-sensitive drop recovery model")
+        else:
+            # For other models, random split is fine
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        
+        # Initialize the right model type with parameters optimized for the dataset
         if model_type == 'random_forest':
+            if is_drop_focused:
+                # Specialized parameters for drop event prediction
+                # These are configured to better learn from rare market events
+                print(f"Using specialized Random Forest parameters for drop events dataset")
+                model = RandomForestRegressor(
+                    n_estimators=400,               # More trees for better recovery pattern recognition
+                    max_depth=10,                   # Limited depth to avoid overfitting on rare patterns
+                    min_samples_split=2,            # Allow for smaller node splits to capture rare patterns
+                    min_samples_leaf=1,             # Allow leaf nodes with just one sample for rare patterns
+                    max_features='sqrt',            # Standard feature selection
+                    bootstrap=True,                 # Use bootstrap samples
+                    n_jobs=-1,                      # Use all available cores
+                    criterion='squared_error',      # Mean squared error criterion
+                    random_state=42,                # For reproducibility
+                    oob_score=True,                 # Use out-of-bag samples for validation
+                    warm_start=False,               # Build a new forest each time
+                    max_leaf_nodes=None,            # No limit on leaf nodes
+                    min_impurity_decrease=0,        # No minimum impurity decrease
+                    ccp_alpha=0.0005                # Minimal complexity pruning for rare event robustness
+                )
             # Check if we're dealing with a very small dataset for rare historical events
-            if len(valid_data) < 10:
+            elif len(valid_data) < 10:
                 print(f"Using specialized Random Forest parameters for small dataset ({len(valid_data)} rows)")
                 # Simplified model for very small datasets
                 model = RandomForestRegressor(
@@ -474,7 +534,20 @@ def train_model(data, features, target_column, model_type='random_forest', test_
                     ccp_alpha=0.001                 # Add minimal complexity pruning for robustness
                 )
         elif model_type == 'gradient_boosting':
-            model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
+            if is_drop_focused:
+                # Specialized parameters for drop event prediction with gradient boosting
+                model = GradientBoostingRegressor(
+                    n_estimators=200,
+                    learning_rate=0.05,
+                    max_depth=6,
+                    min_samples_split=2,
+                    min_samples_leaf=1,
+                    subsample=0.8,
+                    max_features='sqrt',
+                    random_state=42
+                )
+            else:
+                model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
         elif model_type == 'linear_regression':
             model = LinearRegression()
         else:
@@ -510,6 +583,18 @@ def train_model(data, features, target_column, model_type='random_forest', test_
             'importance': feature_importance
         }).sort_values('importance', ascending=False)
         
+        # For drop-focused models, include additional model metadata
+        model_metadata = {}
+        if is_drop_focused:
+            model_metadata['is_drop_focused'] = True
+            model_metadata['target_period'] = target_column
+            if 'Recovery_1d' in data.columns:
+                model_metadata['median_1d_recovery'] = float(data['Recovery_1d'].median())
+            if 'Recovery_5d' in data.columns:
+                model_metadata['median_5d_recovery'] = float(data['Recovery_5d'].median())
+            if 'Days_To_Recovery' in data.columns:
+                model_metadata['median_days_to_recovery'] = float(data['Days_To_Recovery'].median())
+        
         # Return the model and metrics
         return {
             'success': True,
@@ -519,7 +604,8 @@ def train_model(data, features, target_column, model_type='random_forest', test_
             'metrics': metrics,
             'feature_importance': importance_df,
             'train_size': len(X_train),
-            'test_size': len(X_test)
+            'test_size': len(X_test),
+            'metadata': model_metadata
         }
     
     except Exception as e:
@@ -1189,8 +1275,8 @@ def create_feature_importance_chart(model_result, title="Feature Importance", he
 def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="S&P 500 Market Scenarios", height=600):
     """
     Create a comprehensive forecast chart showing different confidence levels (bear, base, bull)
-    for multiple time periods (1W, 1M, 3M, 6M, 1Y) in a single visualization without requiring
-    specific target selection.
+    for multiple time periods (1W, 1M, 3M, 6M, 1Y) in a single visualization.
+    Enhanced to better leverage historical market drop events and recovery patterns.
     
     Parameters:
     -----------
@@ -1238,9 +1324,9 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
         return fig
     
     try:
-        # Forecast periods to model and display
-        forecast_periods = ['1W', '1M', '3M', '6M', '1Y']
-        forecast_days_map = {'1W': 5, '1M': 21, '3M': 63, '6M': 126, '1Y': 252}
+        # Expanded forecast periods to include shorter timeframes for better recovery analysis
+        forecast_periods = ['1D', '3D', '1W', '1M', '3M', '6M', '1Y']
+        forecast_days_map = {'1D': 1, '3D': 3, '1W': 5, '1M': 21, '3M': 63, '6M': 126, '1Y': 252}
         
         # Train models for all periods in parallel
         period_models = {}
@@ -1269,15 +1355,50 @@ def create_multi_scenario_forecast(data, features, days_to_forecast=365, title="
             basic_features = ['Return', 'Volume_Ratio_10D', 'RSI_14']
             features = [f for f in basic_features if f in data.columns]
             print(f"Using basic feature set: {features}")
-            
-        # Create a target column for 1Y if not present
-        if 'Fwd_Ret_1Y' not in data.columns:
-            # Calculate from Close price if possible
+        
+        # Create forward return columns for all timeframes if not present
+        for period, days in forecast_days_map.items():
+            col_name = f'Fwd_Ret_{period}'
+            if col_name not in data.columns and 'Close' in data.columns:
+                try:
+                    # Calculate forward returns for this period
+                    data[col_name] = np.nan
+                    for i in range(len(data) - days):
+                        if i < len(data) and i+days < len(data):
+                            start_price = data['Close'].iloc[i]
+                            end_price = data['Close'].iloc[i + days]
+                            ret = ((end_price / start_price) - 1) * 100
+                            data.loc[data.index[i], col_name] = ret
+                    print(f"Created '{col_name}' based on {days}-day future returns")
+                except Exception as e:
+                    print(f"Could not create {col_name} column: {str(e)}")
+        
+        # Create specialized dataset for drop events analysis
+        drop_threshold = -3.0  # Using standard 3% drop threshold
+        drop_data = None
+        
+        # Check if we have return data to identify drop events
+        if 'Return' in data.columns:
             try:
-                data['Fwd_Ret_1Y'] = data['Close'].pct_change(252).shift(-252) * 100
-                print("Created 'Fwd_Ret_1Y' based on 252-day future returns")
+                # Create a copy of the dataset focused on drop events and their recovery periods
+                drop_specialized_data, drop_specialized_features = prepare_features(
+                    data.copy(), 
+                    focus_on_drops=True, 
+                    drop_threshold=drop_threshold
+                )
+                
+                if not drop_specialized_data.empty:
+                    drop_data = drop_specialized_data
+                    print(f"Successfully created specialized dataset with {len(drop_data)} drop-related rows")
+                    
+                    # Add key recovery metrics to main feature set if they exist in drop dataset
+                    recovery_features = ['Recovery_1d', 'Recovery_3d', 'Recovery_5d', 'Recovery_10d', 'Days_To_Recovery']
+                    for feature in recovery_features:
+                        if feature in drop_data.columns and feature not in features:
+                            features.append(feature)
+                            print(f"Added recovery feature: {feature}")
             except Exception as e:
-                print(f"Could not create Fwd_Ret_1Y column: {str(e)}")
+                print(f"Warning: Couldn't create specialized drop dataset: {str(e)}")
         
         # Train model with fallback options
         combined_target = 'Fwd_Ret_1Y' if 'Fwd_Ret_1Y' in data.columns else 'Fwd_Ret_1M'
