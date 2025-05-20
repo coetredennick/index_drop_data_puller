@@ -4,6 +4,29 @@ import yfinance as yf
 import streamlit as st
 from datetime import datetime, timedelta
 import os
+import sys
+import time
+import random
+
+# Add root directory to path to import the config
+sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
+
+# Try to import config settings
+try:
+    from data_fetch_config import *
+except ImportError:
+    # Default values if config not found
+    DEFAULT_DAYS = 730  # 2 years
+    INITIAL_DELAY = 3
+    BETWEEN_INDICES_DELAY = 15
+    BETWEEN_CHUNKS_DELAY = 10
+    VOLATILITY_FETCH_DELAY = 8
+    MAX_RETRIES = 5
+    BASE_RETRY_DELAY = 10
+    MAX_RETRY_DELAY = 60
+    CHUNK_SIZE_DAYS = 365
+    MINI_CHUNK_SIZE_DAYS = 90
+    CACHE_TTL = 1800
 
 # Dictionary mapping index names to their Yahoo Finance symbols and volatility indexes
 INDEX_MAPPING = {
