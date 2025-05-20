@@ -357,6 +357,21 @@ tabs = st.tabs([
     "🤖 ML Predictions"
 ])
 
+# Add a note about API rate limits at the top of the page
+st.markdown("""
+<div style="border-left: 3px solid #FF9800; padding: 10px; background-color: #FFF8E1; margin-bottom: 15px;">
+    <p style="margin: 0; font-size: 0.9em;">
+        <strong>Note:</strong> This app uses Yahoo Finance data which has rate limits. 
+        For best results:
+        <ul style="margin: 5px 0 0 15px; padding: 0;">
+            <li>Use shorter date ranges (1-2 years)</li>
+            <li>Allow time between selecting different market indices</li>
+            <li>Be patient during data loading - sequential fetching with delays is used</li>
+        </ul>
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
 # Add a light separator before tabs content
 st.markdown('<hr style="margin-top: 0; margin-bottom: 15px; border: none; height: 1px; background-color: #f0f2f6;">', unsafe_allow_html=True)
 
@@ -366,16 +381,6 @@ with tabs[0]:
 
 with tabs[1]:
     show_ml_predictions()
-
-# Add a note about API rate limits
-st.markdown("""
-<div style="border: 1px solid #f0f2f6; border-radius: 5px; padding: 10px; background-color: #f8f9fa; margin-top: 20px;">
-    <p style="font-size: 0.8rem; color: #5A6570; margin: 0;">
-        <strong>Note:</strong> This application uses Yahoo Finance API which has rate limits. 
-        For best results, use shorter date ranges (1-2 years) and allow time between selecting different market indices.
-    </p>
-</div>
-""", unsafe_allow_html=True)
 
 # Add footer
 st.markdown("""

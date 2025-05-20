@@ -295,6 +295,11 @@ def fetch_market_data(index_name="S&P 500", start_date=None, end_date=None, incl
             vol_attempts = 0
             while vol_attempts < max_retries:
                 try:
+                    # Add a sequential delay before fetching volatility data to avoid rate limiting
+                    if vol_attempts == 0:  # Only on the first attempt
+                        st.info(f"Adding delay before fetching volatility data ({volatility_symbol})...")
+                        time.sleep(15)  # Wait 15 seconds before fetching volatility data
+                    
                     # Fetch volatility index data
                     vol_data = yf.download(
                         volatility_symbol,
@@ -353,7 +358,9 @@ def fetch_market_data(index_name="S&P 500", start_date=None, end_date=None, incl
                     
                     # Special handling for rate limit errors
                     if vol_attempts < max_retries and ("Rate limited" in error_msg or "Too Many Requests" in error_msg):
-                        time.sleep(retry_delay * 2)  # Longer delay for rate limits
+                        backoff_time = calculate_backoff_time(vol_attempts, base_delay=retry_delay*2)
+                        st.warning(f"Yahoo Finance rate limit reached for volatility data. Waiting {backoff_time:.1f}s before retry {vol_attempts}/{max_retries}...")
+                        time.sleep(backoff_time)  # Use exponential backoff with longer delay for rate limits
                     else:
                         # After max retries or for other errors, just continue without volatility data
                         st.info(f"Volatility data for {index_name} not available (Error: {e}), continuing without volatility metrics.")
