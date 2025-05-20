@@ -188,6 +188,21 @@ if 'selected_event' not in st.session_state:
     st.session_state.selected_event = None
 if 'current_event_type_filter' not in st.session_state:
     st.session_state.current_event_type_filter = 'all'
+    
+# Initialize data for each market index
+for index in ['sp500', 'nasdaq', 'dow']:
+    if f'{index}_data' not in st.session_state:
+        st.session_state[f'{index}_data'] = None
+    if f'{index}_drop_events' not in st.session_state:
+        st.session_state[f'{index}_drop_events'] = None
+    if f'{index}_consecutive_drop_events' not in st.session_state:
+        st.session_state[f'{index}_consecutive_drop_events'] = None
+        
+# Track which index tab is active and has been loaded
+if 'active_index' not in st.session_state:
+    st.session_state.active_index = 'sp500'  # Default to S&P 500
+if 'loaded_indices' not in st.session_state:
+    st.session_state.loaded_indices = set()  # Track which indices have been loaded
 
 # Main page settings in a clean container
 # Use a form to prevent reloads when adjusting sliders
@@ -256,11 +271,20 @@ if submit_button:
     st.session_state.consecutive_days = consecutive_days if use_consecutive else 1
     st.session_state.date_range = (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
     
-    # Reset data and events when settings change
+    # Reset data for all indices
+    for index in ['sp500', 'nasdaq', 'dow']:
+        st.session_state[f'{index}_data'] = None
+        st.session_state[f'{index}_drop_events'] = None
+        st.session_state[f'{index}_consecutive_drop_events'] = None
+    
+    # Also reset the legacy variables
     st.session_state.data = None
     st.session_state.drop_events = None
     st.session_state.consecutive_drop_events = None
     st.session_state.selected_event = None
+    
+    # Clear loaded indices
+    st.session_state.loaded_indices = set()
     
     # Show info message
     st.success("✅ Settings applied! Data will be refreshed.")
