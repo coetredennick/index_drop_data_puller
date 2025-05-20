@@ -28,6 +28,8 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
     pandas.DataFrame
         DataFrame containing S&P 500 historical data with VIX data if requested
     """
+    import time
+    
     # Record the attempt count
     attempts = 0
     
@@ -36,37 +38,91 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
     start_dt = pd.to_datetime(start_date)
     end_dt = pd.to_datetime(end_date)
     
-    # If the date range is more than 10 years, let's use a different strategy
-    if (end_dt - start_dt) > timedelta(days=365*10):
-        # Use a different interval for very long periods
+    # Initialize sp500 as None to handle cases where we don't execute the if or else blocks
+    sp500 = None
+    
+    # For all date ranges, use daily data but handle long periods differently
+    if (end_dt - start_dt) > timedelta(days=365*5):  # Use chunking for periods over 5 years
         try:
-            st.info("Fetching long-term data, this may take a moment...")
-            sp500 = yf.download(
-                "^GSPC",
-                start=start_date,
-                end=end_date,
-                interval="1wk",  # Use weekly data for longer periods
-                progress=False
-            )
+            st.info("Fetching long-term data in chunks to avoid rate limiting...")
             
-            if not sp500.empty:
-                # Fix for MultiIndex columns
-                if isinstance(sp500.columns, pd.MultiIndex):
-                    sp500.columns = [col[0] for col in sp500.columns]
+            # Split into chunks of 1 year each
+            chunks = []
+            current_start = start_dt
+            while current_start < end_dt:
+                current_end = min(current_start + timedelta(days=365), end_dt)
+                chunks.append((current_start.strftime('%Y-%m-%d'), current_end.strftime('%Y-%m-%d')))
+                current_start = current_end + timedelta(days=1)
+            
+            # Fetch data for each chunk
+            all_data = []
+            for i, (chunk_start, chunk_end) in enumerate(chunks):
+                st.info(f"Fetching chunk {i+1}/{len(chunks)}: {chunk_start} to {chunk_end}")
                 
-                # Resample to business days if needed
-                # sp500 = sp500.asfreq('B', method='ffill')
+                # Add a delay between chunks to avoid rate limiting
+                if i > 0:
+                    time.sleep(retry_delay)
                 
-                st.success("Successfully fetched long-term weekly data!")
+                chunk_attempts = 0
+                while chunk_attempts < max_retries:
+                    try:
+                        chunk_data = yf.download(
+                            "^GSPC",
+                            start=chunk_start,
+                            end=chunk_end,
+                            progress=False
+                        )
+                        
+                        if not chunk_data.empty:
+                            all_data.append(chunk_data)
+                            break
+                        else:
+                            chunk_attempts += 1
+                            st.warning(f"Received empty data for chunk. Retry {chunk_attempts}/{max_retries}...")
+                            time.sleep(retry_delay)
+                    
+                    except Exception as e:
+                        chunk_attempts += 1
+                        error_msg = str(e)
+                        
+                        # Special handling for rate limit errors
+                        if "Rate limited" in error_msg or "Too Many Requests" in error_msg:
+                            st.warning(f"Yahoo Finance rate limit reached. Retry {chunk_attempts}/{max_retries} after delay...")
+                            time.sleep(retry_delay * 3)  # Longer delay for rate limits
+                        else:
+                            st.error(f"Error fetching chunk: {e}. Retry {chunk_attempts}/{max_retries}...")
+                            time.sleep(retry_delay)
+                        
+                        # If we've reached max retries for this chunk, continue to next chunk
+                        if chunk_attempts >= max_retries:
+                            st.error(f"Failed to fetch data for chunk {i+1} after {max_retries} attempts.")
+                            break
+            
+            # Combine all chunks
+            if all_data:
+                sp500 = pd.concat(all_data, axis=0)
+                if not sp500.empty:
+                    sp500 = sp500[~sp500.index.duplicated(keep='first')]  # Remove duplicate indices
+                    
+                    # Fix for MultiIndex columns
+                    if isinstance(sp500.columns, pd.MultiIndex):
+                        sp500.columns = [col[0] for col in sp500.columns]
+                    
+                    st.success(f"Successfully fetched data for {len(sp500)} trading days!")
+                else:
+                    st.warning("After combining chunks, no data was available.")
+                    return None
             else:
                 st.warning("No data available for the given date range.")
                 return None
                 
         except Exception as e:
-            st.error(f"Error fetching long-term data: {e}")
-            # Fallback to the normal approach
+            st.error(f"Error in chunked data fetch approach: {e}")
+            # Continue with normal approach as fallback
             pass
-    else:
+    
+    # If sp500 is still None (chunking failed or wasn't used), try the normal approach
+    if sp500 is None or sp500.empty:
         # Normal approach with retries for rate limiting
         while attempts < max_retries:
             try:
@@ -85,7 +141,6 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
                 # If we got empty data, try again
                 attempts += 1
                 st.warning(f"Received empty data. Retry {attempts}/{max_retries}...")
-                import time
                 time.sleep(retry_delay)
                 
             except Exception as e:
@@ -95,11 +150,9 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
                 # Special handling for rate limit errors
                 if "Rate limited" in error_msg or "Too Many Requests" in error_msg:
                     st.warning(f"Yahoo Finance rate limit reached. Retry {attempts}/{max_retries} after delay...")
-                    import time
                     time.sleep(retry_delay * 2)  # Longer delay for rate limits
                 else:
                     st.error(f"Error fetching S&P 500 data: {e}. Retry {attempts}/{max_retries}...")
-                    import time
                     time.sleep(retry_delay)
                 
                 # If we've reached max retries, return None
@@ -185,7 +238,6 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
                         # If we got empty data, try again
                         vix_attempts += 1
                         if vix_attempts < max_retries:
-                            import time
                             time.sleep(retry_delay)
                         else:
                             # After max retries, just continue without VIX data
@@ -197,7 +249,6 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
                     
                     # Special handling for rate limit errors
                     if vix_attempts < max_retries and ("Rate limited" in error_msg or "Too Many Requests" in error_msg):
-                        import time
                         time.sleep(retry_delay * 2)  # Longer delay for rate limits
                     else:
                         # After max retries or for other errors, just continue without VIX data
