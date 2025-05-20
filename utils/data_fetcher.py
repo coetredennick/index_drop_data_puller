@@ -238,6 +238,82 @@ def cache_data(data, drop_events, consecutive_drop_events):
     # But we'll keep it for future enhancements
     pass
 
+def create_sample_data(start_date, end_date):
+    """
+    Create sample S&P 500 data when API fails
+    
+    Parameters:
+    -----------
+    start_date : str
+        Start date in the format 'YYYY-MM-DD'
+    end_date : str
+        End date in the format 'YYYY-MM-DD'
+        
+    Returns:
+    --------
+    pandas.DataFrame
+        DataFrame containing sample S&P 500 data
+    """
+    st.warning("Using sample data for demonstration purposes. Real data could not be fetched from Yahoo Finance.")
+    
+    # Convert dates to datetime
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    
+    # Create a date range
+    date_range = pd.date_range(start=start_dt, end=end_dt, freq='B')  # Business days
+    
+    # Create a sample dataset with realistic S&P 500 patterns
+    np.random.seed(42)  # For reproducibility
+    
+    # Start with a base value around 4000 (typical S&P 500 value in recent years)
+    base_price = 4000
+    
+    # Create prices with realistic volatility
+    daily_returns = np.random.normal(0.0005, 0.015, len(date_range))  # Mean return and volatility
+    prices = [base_price]
+    
+    for ret in daily_returns:
+        prices.append(prices[-1] * (1 + ret))
+    
+    prices = prices[1:]  # Remove the first base price
+    
+    # Create a sample DataFrame
+    sample_data = pd.DataFrame({
+        'Open': prices * np.random.uniform(0.995, 1.000, len(prices)),
+        'High': prices * np.random.uniform(1.005, 1.015, len(prices)),
+        'Low': prices * np.random.uniform(0.985, 0.995, len(prices)),
+        'Close': prices,
+        'Adj Close': prices,
+        'Volume': np.random.randint(2000000000, 5000000000, len(prices))
+    }, index=date_range)
+    
+    # Calculate returns and other metrics
+    sample_data['Return'] = sample_data['Close'].pct_change() * 100
+    sample_data['Change'] = sample_data['Close'] - sample_data['Open']
+    sample_data['Change_Pct'] = (sample_data['Close'] - sample_data['Open']) / sample_data['Open'] * 100
+    sample_data['HL_Range'] = (sample_data['High'] - sample_data['Low']) / sample_data['Open'] * 100
+    
+    # Forward returns for different time periods
+    for days, label in [(1, '1D'), (2, '2D'), (3, '3D'), (5, '1W'), (21, '1M'), (63, '3M'), (126, '6M'), (252, '1Y')]:
+        if days < len(sample_data):
+            sample_data[f'Fwd_Ret_{label}'] = sample_data['Close'].pct_change(periods=days).shift(-days) * 100
+    
+    # Create synthetic VIX data (typically inversely correlated with S&P)
+    vix_base = 20
+    sample_data['VIX_Close'] = vix_base - sample_data['Return'] * 0.5 + np.random.normal(0, 2, len(sample_data))
+    sample_data['VIX_Close'] = sample_data['VIX_Close'].clip(lower=10, upper=40)  # Realistic VIX range
+    
+    sample_data['VIX_Return'] = sample_data['VIX_Close'].pct_change() * 100
+    sample_data['VIX_5D_Avg'] = sample_data['VIX_Close'].rolling(window=5).mean()
+    sample_data['VIX_20D_Avg'] = sample_data['VIX_Close'].rolling(window=20).mean()
+    
+    # Add RSI and other indicators to make it more complete
+    sample_data['RSI_14'] = 50 + (sample_data['Return'].rolling(window=14).mean() * 5)
+    sample_data['RSI_14'] = sample_data['RSI_14'].clip(lower=30, upper=70)
+    
+    return sample_data
+
 def get_latest_sp500_data():
     """
     Get the latest S&P 500 data for the current market conditions tab
@@ -250,4 +326,10 @@ def get_latest_sp500_data():
     end_date = datetime.today().strftime('%Y-%m-%d')
     start_date = (datetime.today() - timedelta(days=60)).strftime('%Y-%m-%d')
     
-    return fetch_sp500_data(start_date, end_date)
+    data = fetch_sp500_data(start_date, end_date)
+    
+    # If we couldn't fetch real data, use sample data for demonstration
+    if data is None or data.empty:
+        return create_sample_data(start_date, end_date)
+    
+    return data
