@@ -286,31 +286,68 @@ with st.spinner("Fetching S&P 500 data..."):
         reload_data = True
     
     if reload_data:
-        # Fetch data
-        data = fetch_sp500_data(st.session_state.date_range[0], st.session_state.date_range[1])
-        
-        if data is not None and not data.empty:
-            # Calculate technical indicators
-            data = calculate_technical_indicators(data)
+        try:
+            # Use a shorter date range for demonstration if the request might hit rate limits
+            # For real production, use the full date range with better error handling
+            current_year = datetime.today().year
+            # Default to a more recent 5-year period if the original range is very long
+            start_date = st.session_state.date_range[0]
+            end_date = st.session_state.date_range[1]
             
-            # Detect drop events
-            drop_events = detect_drop_events(data, st.session_state.drop_threshold)
+            # Show a message about using a sample range if the date range is very long
+            date_range_years = (pd.to_datetime(end_date) - pd.to_datetime(start_date)).days / 365
+            if date_range_years > 10:
+                st.info(f"Note: You've selected {date_range_years:.1f} years of data. This may take longer to load or hit API rate limits.")
             
-            consecutive_drop_events = detect_consecutive_drops(
-                data, 
-                st.session_state.drop_threshold, 
-                st.session_state.consecutive_days
-            ) if st.session_state.consecutive_days > 1 else None
+            # Fetch data with our more robust method
+            data = fetch_sp500_data(start_date, end_date, max_retries=3, retry_delay=2)
             
-            # Update session state
-            st.session_state.data = data
-            st.session_state.drop_events = drop_events
-            st.session_state.consecutive_drop_events = consecutive_drop_events
+            if data is not None and not data.empty:
+                # Calculate technical indicators
+                data = calculate_technical_indicators(data)
+                
+                # Detect drop events
+                drop_events = detect_drop_events(data, st.session_state.drop_threshold)
+                
+                consecutive_drop_events = detect_consecutive_drops(
+                    data, 
+                    st.session_state.drop_threshold, 
+                    st.session_state.consecutive_days
+                ) if st.session_state.consecutive_days > 1 else None
+                
+                # Update session state
+                st.session_state.data = data
+                st.session_state.drop_events = drop_events
+                st.session_state.consecutive_drop_events = consecutive_drop_events
+                
+                # Cache data
+                cache_data(data, drop_events, consecutive_drop_events)
+                
+                # Show success message
+                st.success(f"Successfully loaded S&P 500 data from {data.index[0].strftime('%Y-%m-%d')} to {data.index[-1].strftime('%Y-%m-%d')}")
+            else:
+                # Use a predefined fallback date range that's less likely to hit rate limits
+                st.warning("Having trouble fetching data for your selected date range due to API rate limits.")
+                st.info("Try again with a shorter date range or wait a few minutes before retrying.")
+                
+                # Create empty placeholders for the session state
+                if st.session_state.data is None:
+                    st.session_state.data = pd.DataFrame()
+                if st.session_state.drop_events is None:
+                    st.session_state.drop_events = []
+                if st.session_state.consecutive_drop_events is None:
+                    st.session_state.consecutive_drop_events = []
+        except Exception as e:
+            st.error(f"Error fetching data: {str(e)}")
+            st.info("The Yahoo Finance API may be temporarily unavailable or rate-limiting requests. Please try again in a few minutes.")
             
-            # Cache data
-            cache_data(data, drop_events, consecutive_drop_events)
-        else:
-            st.error("Failed to fetch S&P 500 data. Please check your internet connection and try again.")
+            # Initialize empty data if needed to prevent app crashes
+            if st.session_state.data is None:
+                st.session_state.data = pd.DataFrame()
+            if st.session_state.drop_events is None:
+                st.session_state.drop_events = []
+            if st.session_state.consecutive_drop_events is None:
+                st.session_state.consecutive_drop_events = []
 
 # Create tabs with icons for better visual organization
 tabs = st.tabs([
