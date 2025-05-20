@@ -772,12 +772,21 @@ def show_historical_performance():
     # Display the custom HTML table
     st.markdown(html_content, unsafe_allow_html=True)
     
-    # Add download button for the detailed database
+    # Add download button for the detailed database with unique key
     if not events_df.empty:
+        # Get the active market index for a unique key and proper file naming
+        active_index = st.session_state.active_index if 'active_index' in st.session_state else 'sp500'
+        market_name = {
+            'sp500': 'S&P 500',
+            'nasdaq': 'NASDAQ',
+            'dow': 'Dow Jones'
+        }.get(active_index, 'Market')
+        
         csv = events_df.to_csv(index=False)
         st.download_button(
-            label="Download Drop Events Database",
+            label=f"Download {market_name} Drop Events Database",
             data=csv,
-            file_name=f"sp500_drop_events_{st.session_state.drop_threshold}pct.csv",
+            file_name=f"{active_index}_drop_events_{st.session_state.drop_threshold}pct.csv",
             mime="text/csv",
+            key=f"download_events_{active_index}"
         )
