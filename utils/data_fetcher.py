@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 import os
 
 @st.cache_data(ttl=3600)  # Cache data for 1 hour
-def fetch_sp500_data(start_date, end_date, include_vix=True):
+def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=5, retry_delay=2):
     """
-    Fetch S&P 500 historical data from Yahoo Finance
+    Fetch S&P 500 historical data from Yahoo Finance with retry mechanism
     
     Parameters:
     -----------
@@ -18,25 +18,67 @@ def fetch_sp500_data(start_date, end_date, include_vix=True):
         End date in the format 'YYYY-MM-DD'
     include_vix : bool, optional
         Whether to include VIX data (default: True)
+    max_retries : int, optional
+        Maximum number of retries for API calls (default: 5)
+    retry_delay : int, optional
+        Delay between retries in seconds (default: 2)
         
     Returns:
     --------
     pandas.DataFrame
         DataFrame containing S&P 500 historical data with VIX data if requested
     """
-    try:
-        # Fetch data
-        sp500 = yf.download(
-            "^GSPC",
-            start=start_date,
-            end=end_date,
-            progress=False
-        )
-        
-        # Basic data cleaning
-        if sp500.empty:
+    import time
+    
+    # If we have cached data in session state, use it when API calls fail
+    if 'fallback_sp500_data' in st.session_state and st.session_state.fallback_sp500_data is not None:
+        fallback_data_available = True
+    else:
+        fallback_data_available = False
+    
+    # Try to fetch data with retries
+    sp500 = None
+    last_error = None
+    
+    for retry in range(max_retries):
+        try:
+            # Fetch S&P 500 data
+            sp500 = yf.download(
+                "^GSPC",
+                start=start_date,
+                end=end_date,
+                progress=False
+            )
+            
+            if not sp500.empty:
+                # We got data, break the retry loop
+                break
+            else:
+                # Empty DataFrame, wait and retry
+                time.sleep(retry_delay)
+                continue
+                
+        except Exception as e:
+            last_error = e
+            # Wait before retrying (increasing delay with each retry)
+            time.sleep(retry_delay * (retry + 1))
+    
+    # If we still couldn't get data after all retries
+    if sp500 is None or sp500.empty:
+        if fallback_data_available:
+            # Use fallback data from session state
+            st.warning("Using cached data due to API limitations. Results may not be up to date.")
+            return st.session_state.fallback_sp500_data
+        else:
+            # No fallback data available
+            error_msg = f"Failed to fetch S&P 500 data after {max_retries} attempts."
+            if last_error:
+                error_msg += f" Error: {last_error}"
+            st.error(error_msg)
             return None
-        
+    
+    try:
+        # Basic data cleaning
         # Fix for MultiIndex columns - flatten the columns
         if isinstance(sp500.columns, pd.MultiIndex):
             sp500.columns = [col[0] for col in sp500.columns]
@@ -57,16 +99,36 @@ def fetch_sp500_data(start_date, end_date, include_vix=True):
         
         # Fetch VIX data if requested
         if include_vix:
-            try:
-                # Fetch VIX data
-                vix_data = yf.download(
-                    "^VIX",
-                    start=start_date,
-                    end=end_date,
-                    progress=False
-                )
-                
-                if not vix_data.empty:
+            vix_data = None
+            vix_last_error = None
+            
+            # Try to fetch VIX data with retries
+            for retry in range(max_retries):
+                try:
+                    # Fetch VIX data
+                    vix_data = yf.download(
+                        "^VIX",
+                        start=start_date,
+                        end=end_date,
+                        progress=False
+                    )
+                    
+                    if not vix_data.empty:
+                        # We got data, break the retry loop
+                        break
+                    else:
+                        # Empty DataFrame, wait and retry
+                        time.sleep(retry_delay)
+                        continue
+                        
+                except Exception as e:
+                    vix_last_error = e
+                    # Wait before retrying (increasing delay with each retry)
+                    time.sleep(retry_delay * (retry + 1))
+            
+            # Process VIX data if available
+            if vix_data is not None and not vix_data.empty:
+                try:
                     # Fix for MultiIndex columns - flatten the columns
                     if isinstance(vix_data.columns, pd.MultiIndex):
                         vix_data.columns = [f'VIX_{col[0]}' for col in vix_data.columns]
@@ -100,16 +162,29 @@ def fetch_sp500_data(start_date, end_date, include_vix=True):
                     if vix_cols:
                         # Use ffill() and bfill() methods instead of fillna(method=) to avoid deprecation warning
                         sp500[vix_cols] = sp500[vix_cols].ffill().bfill()
-                
-            except Exception as e:
-                # Log the error but continue without VIX data
-                print(f"Error fetching VIX data: {e}")
-                # Continue without VIX data
+                        
+                except Exception as e:
+                    # Log the error but continue without VIX data
+                    print(f"Error processing VIX data: {e}")
+            else:
+                # Could not fetch VIX data after retries
+                if vix_last_error:
+                    print(f"Failed to fetch VIX data: {vix_last_error}")
+                else:
+                    print("Failed to fetch VIX data: Empty response")
+        
+        # Save successful data as fallback for future API failures
+        st.session_state.fallback_sp500_data = sp500
         
         return sp500
         
     except Exception as e:
-        st.error(f"Error fetching data: {e}")
+        st.error(f"Error processing S&P 500 data: {e}")
+        
+        if fallback_data_available:
+            st.warning("Using cached data due to processing error. Results may not reflect the latest information.")
+            return st.session_state.fallback_sp500_data
+        
         return None
 
 @st.cache_data(ttl=86400)  # Cache for 24 hours
