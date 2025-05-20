@@ -60,6 +60,9 @@ def show_historical_performance():
     # Check if data and events are available
     data_available = st.session_state.data is not None and not st.session_state.data.empty
     
+    # Initialize all_events to empty list as default
+    all_events = []
+    
     if not data_available:
         st.warning("No data available. Please adjust the date range and fetch data.")
     else:
@@ -173,8 +176,11 @@ def show_historical_performance():
     
     # Show price chart with drop events marked
     st.markdown("### S&P 500 Price Chart with Drop Events")
-    fig_price = create_price_chart(st.session_state.data, all_events)
-    st.plotly_chart(fig_price, use_container_width=True)
+    if st.session_state.data is not None and not st.session_state.data.empty:
+        fig_price = create_price_chart(st.session_state.data, all_events)
+        st.plotly_chart(fig_price, use_container_width=True)
+    else:
+        st.warning("Cannot create price chart. No data available. Please try adjusting the date range and fetching data again.")
     
     # Calculate aggregate returns after drops for use in detailed DB
     time_periods = ['1W', '1M', '3M', '6M', '1Y', '3Y']
