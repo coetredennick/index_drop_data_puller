@@ -278,6 +278,45 @@ st.markdown("""
 # Main content
 # Fetch and process data
 with st.spinner("Fetching S&P 500 data..."):
+    # Add API settings option
+    with st.expander("Data Fetch Settings (Advanced)"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Allow users to enter their own API key for higher rate limits
+            use_api_key = st.checkbox("Use Your Yahoo Finance API Key", value=False, 
+                                 help="Enable to use your own API key for higher rate limits")
+            
+            if use_api_key:
+                yf_api_key = st.text_input("Yahoo Finance API Key", type="password",
+                                      help="Enter your Yahoo Finance API key for higher rate limits")
+                if yf_api_key:
+                    st.success("API key entered!")
+                    # Store the API key in session state for use in data fetching
+                    st.session_state.yf_api_key = yf_api_key
+            
+            # Option to use demo data when Yahoo Finance is unavailable
+            if 'use_demo_data' not in st.session_state:
+                st.session_state.use_demo_data = False
+                
+            use_demo_data = st.checkbox("Use Demo Data", value=st.session_state.use_demo_data,
+                                   help="Use demonstration data when Yahoo Finance is unavailable due to rate limits")
+            
+            # Store the demo data preference in session state
+            if use_demo_data != st.session_state.use_demo_data:
+                st.session_state.use_demo_data = use_demo_data
+            
+            # Shorter time range for reduced API load
+            shorter_range = st.checkbox("Use Shorter Time Range", value=True, 
+                                   help="Recommended when facing API rate limits")
+        
+        with col2:
+            retries = st.slider("Max Retries", min_value=1, max_value=10, value=5,
+                           help="Number of retry attempts for API calls")
+            
+            delay = st.slider("Retry Delay (seconds)", min_value=1, max_value=10, value=2,
+                         help="Delay between retry attempts")
+    
     # Check if we need to reload data based on settings changes
     reload_data = False
     if st.session_state.data is None:
@@ -286,8 +325,60 @@ with st.spinner("Fetching S&P 500 data..."):
         reload_data = True
     
     if reload_data:
-        # Fetch data
-        data = fetch_sp500_data(st.session_state.date_range[0], st.session_state.date_range[1])
+        # If shorter range is enabled, adjust the date range to reduce API load
+        if shorter_range:
+            # Calculate a shorter date range (last 1 year or user selection, whichever is shorter)
+            end_date_dt = pd.to_datetime(st.session_state.date_range[1])
+            one_year_ago = (end_date_dt - timedelta(days=365)).strftime('%Y-%m-%d')
+            adjusted_start_date = max(one_year_ago, st.session_state.date_range[0])
+            
+            # Notify user of adjustment
+            if adjusted_start_date != st.session_state.date_range[0]:
+                st.info(f"Date range adjusted to 1 year to reduce API load: {adjusted_start_date} to {st.session_state.date_range[1]}")
+                fetch_start_date = adjusted_start_date
+            else:
+                fetch_start_date = st.session_state.date_range[0]
+        else:
+            fetch_start_date = st.session_state.date_range[0]
+        
+        # Check if user provided an API key
+        api_key = st.session_state.get('yf_api_key', None)
+        
+        # Ask user if they'd like to use their own credentials for Yahoo Finance
+        if st.session_state.get('yahoo_finance_api_issues', False):
+            st.warning("""
+            Yahoo Finance API rate limits have been reached. For reliable access to market data:
+            
+            1. Try again in a few minutes as rate limits may reset
+            2. Adjust to a shorter date range (e.g., 1 year instead of multiple years)
+            3. Use your own API credentials if you have access to financial data APIs
+            """)
+            
+            # Add option to use Alpha Vantage as an alternative data source
+            use_alt_source = st.checkbox("Use Alternative Data Source (Alpha Vantage)", 
+                                     help="Alpha Vantage provides free financial data APIs with higher rate limits")
+            
+            if use_alt_source:
+                # Ask for API key if not already provided
+                if 'alpha_vantage_api_key' not in st.session_state:
+                    alpha_vantage_key = st.text_input("Alpha Vantage API Key", 
+                                                 type="password",
+                                                 help="Get a free API key from alphavantage.co")
+                    if alpha_vantage_key:
+                        st.session_state.alpha_vantage_api_key = alpha_vantage_key
+                        st.success("API key saved!")
+            
+            # Will continue with Yahoo Finance attempts for now,
+            # as implementing Alpha Vantage would require additional development
+        else:
+            # Fetch data with retry settings
+            data = fetch_sp500_data(
+                fetch_start_date, 
+                st.session_state.date_range[1],
+                max_retries=retries,
+                retry_delay=delay,
+                api_key=api_key
+            )
         
         if data is not None and not data.empty:
             # Calculate technical indicators
@@ -310,7 +401,20 @@ with st.spinner("Fetching S&P 500 data..."):
             # Cache data
             cache_data(data, drop_events, consecutive_drop_events)
         else:
-            st.error("Failed to fetch S&P 500 data. Please check your internet connection and try again.")
+            st.error("Failed to fetch S&P 500 data due to API rate limits. Try again later or adjust the date range to a shorter period.")
+            
+            # Tips for API rate limit issues
+            with st.expander("Tips for handling API rate limits"):
+                st.markdown("""
+                **How to handle Yahoo Finance API rate limits:**
+                
+                1. **Try shorter time ranges** - Reduce the date range to 1 year or less
+                2. **Wait a few minutes** - The rate limits reset after a period of time
+                3. **Try again during off-peak hours** - API access may be more available
+                4. **Adjust the retry settings** - Increase delay between retry attempts
+                """)
+                
+                st.warning("Remember: This app relies on Yahoo Finance for real market data. Rate limits are a normal part of using their free API service.")
 
 # Create tabs with icons for better visual organization
 tabs = st.tabs([

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import os
 
 @st.cache_data(ttl=3600)  # Cache data for 1 hour
-def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=5, retry_delay=2):
+def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=5, retry_delay=2, api_key=None):
     """
     Fetch S&P 500 historical data from Yahoo Finance with retry mechanism
     
@@ -22,6 +22,8 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=5, retr
         Maximum number of retries for API calls (default: 5)
     retry_delay : int, optional
         Delay between retries in seconds (default: 2)
+    api_key : str, optional
+        Yahoo Finance API key for higher rate limits (default: None)
         
     Returns:
     --------
@@ -43,6 +45,37 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=5, retr
     for retry in range(max_retries):
         try:
             # Fetch S&P 500 data
+            # If an API key is provided, use it
+            if api_key:
+                # Configure yfinance with the API key (implementation may vary based on yfinance version)
+                try:
+                    # Try to set the API key if supported
+                    if hasattr(yf, 'set_api_key'):
+                        yf.set_api_key(api_key)
+                    
+                    # or use requests session method if that's supported
+                    elif hasattr(yf, 'Session'):
+                        session = yf.Session()
+                        session.headers['X-API-KEY'] = api_key
+                        sp500 = yf.download(
+                            "^GSPC",
+                            start=start_date,
+                            end=end_date,
+                            progress=False,
+                            session=session
+                        )
+                        
+                        if sp500 is not None and not sp500.empty:
+                            # We got data, break the retry loop
+                            break
+                    else:
+                        # Log that API key is not supported by this yfinance version
+                        print("API key provided but not supported by current yfinance version")
+                except Exception as api_key_error:
+                    print(f"Error setting API key: {api_key_error}")
+                    # Continue without API key
+            
+            # Standard download without API key
             sp500 = yf.download(
                 "^GSPC",
                 start=start_date,
@@ -50,7 +83,7 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=5, retr
                 progress=False
             )
             
-            if not sp500.empty:
+            if sp500 is not None and not sp500.empty:
                 # We got data, break the retry loop
                 break
             else:
@@ -60,6 +93,7 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=5, retr
                 
         except Exception as e:
             last_error = e
+            print(f"Retry {retry+1}/{max_retries} failed: {e}")
             # Wait before retrying (increasing delay with each retry)
             time.sleep(retry_delay * (retry + 1))
     
