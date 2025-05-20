@@ -8,7 +8,7 @@ import sys
 # Add utils to path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from utils.data_fetcher import fetch_sp500_data, cache_data
+from utils.data_fetcher import fetch_market_data, cache_data, INDEX_MAPPING
 from utils.technical_indicators import calculate_technical_indicators
 from utils.event_detection import detect_drop_events, detect_consecutive_drops
 from pages.historical_performance import show_historical_performance
@@ -16,7 +16,7 @@ from pages.ml_predictions_new import show_ml_predictions
 
 # Configure the page
 st.set_page_config(
-    page_title="S&P 500 Market Drop Analyzer",
+    page_title="Market Drop Analyzer",
     page_icon="📉",
     layout="wide",
     initial_sidebar_state="collapsed"  # Explicitly collapse the sidebar
@@ -163,7 +163,7 @@ st.markdown("""
 # Cleaner title and description layout
 st.markdown("""
 <div style="text-align: center; padding: 1rem 0; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 1rem;">
-    <h1 style="margin: 0; padding: 0; color: #1E4A7B;">S&P 500 Market Drop Analyzer</h1>
+    <h1 style="margin: 0; padding: 0; color: #1E4A7B;">Market Drop Analyzer</h1>
     <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #5A6570;">
         A data-driven tool for analyzing market corrections and forecasting recovery patterns
     </p>
@@ -177,7 +177,7 @@ if 'drop_threshold' not in st.session_state:
 if 'consecutive_days' not in st.session_state:
     st.session_state.consecutive_days = 1
 if 'date_range' not in st.session_state:
-    st.session_state.date_range = ('1990-01-01', datetime.today().strftime('%Y-%m-%d'))
+    st.session_state.date_range = ('2020-01-01', datetime.today().strftime('%Y-%m-%d'))
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'drop_events' not in st.session_state:
@@ -188,14 +188,28 @@ if 'selected_event' not in st.session_state:
     st.session_state.selected_event = None
 if 'current_event_type_filter' not in st.session_state:
     st.session_state.current_event_type_filter = 'all'
+if 'selected_index' not in st.session_state:
+    st.session_state.selected_index = "S&P 500"
 
 # Main page settings in a clean container
 # Use a form to prevent reloads when adjusting sliders
 with st.form(key="analysis_settings_form"):
-    # Use two columns for a cleaner layout - left for dates, right for thresholds
-    col1, col2 = st.columns([1, 1])
+    # Use three columns for a cleaner layout - left for market selection, middle for dates, right for thresholds
+    col1, col2, col3 = st.columns([1, 1, 1])
     
     with col1:
+        st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Market Index</h4>", unsafe_allow_html=True)
+        
+        # Create market index selection dropdown
+        market_index = st.selectbox(
+            "Select Market Index",
+            options=list(INDEX_MAPPING.keys()),
+            index=list(INDEX_MAPPING.keys()).index(st.session_state.selected_index),
+            format_func=lambda x: f"{x} ({INDEX_MAPPING[x]['description']})",
+            key="market_index"
+        )
+    
+    with col2:
         st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Date Range</h4>", unsafe_allow_html=True)
         date_col1, date_col2 = st.columns(2)
         
@@ -217,7 +231,7 @@ with st.form(key="analysis_settings_form"):
                 key="end_date"
             )
     
-    with col2:
+    with col3:
         st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Drop Event Detection</h4>", unsafe_allow_html=True)
         
         drop_threshold = st.slider(
@@ -252,6 +266,7 @@ with st.form(key="analysis_settings_form"):
 # Process form submission outside the form block
 if submit_button:
     # Update session state
+    st.session_state.selected_index = market_index
     st.session_state.drop_threshold = drop_threshold
     st.session_state.consecutive_days = consecutive_days if use_consecutive else 1
     st.session_state.date_range = (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
@@ -263,31 +278,37 @@ if submit_button:
     st.session_state.selected_event = None
     
     # Show info message
-    st.success("✅ Settings applied! Data will be refreshed.")
+    st.success(f"✅ Settings applied! {market_index} data will be refreshed.")
     st.rerun()
 
 # Data source info with improved styling
-st.markdown("""
+st.markdown(f"""
 <div style="text-align: right; font-size: 0.8em; color: #5A6570; margin-top: -0.5rem; margin-bottom: 0.7rem;">
     <span style="background-color: #f0f2f6; padding: 0.2rem 0.5rem; border-radius: 3px;">
-        <i>Data source: Yahoo Finance (^GSPC)</i>
+        <i>Data source: Yahoo Finance ({INDEX_MAPPING[st.session_state.selected_index]['symbol']})</i>
     </span>
 </div>
 """, unsafe_allow_html=True)
 
 # Main content
 # Fetch and process data
-with st.spinner("Fetching S&P 500 data..."):
+with st.spinner(f"Fetching {st.session_state.selected_index} data..."):
     # Check if we need to reload data based on settings changes
     reload_data = False
     if st.session_state.data is None:
         reload_data = True
     elif not all(date in st.session_state.data.index for date in [st.session_state.date_range[0], st.session_state.date_range[1]]):
         reload_data = True
+    elif 'Index' in st.session_state.data.columns and st.session_state.data['Index'].iloc[0] != st.session_state.selected_index:
+        reload_data = True
     
     if reload_data:
-        # Fetch data
-        data = fetch_sp500_data(st.session_state.date_range[0], st.session_state.date_range[1])
+        # Fetch data for the selected index
+        data = fetch_market_data(
+            index_name=st.session_state.selected_index,
+            start_date=st.session_state.date_range[0], 
+            end_date=st.session_state.date_range[1]
+        )
         
         if data is not None and not data.empty:
             # Calculate technical indicators
@@ -310,7 +331,7 @@ with st.spinner("Fetching S&P 500 data..."):
             # Cache data
             cache_data(data, drop_events, consecutive_drop_events)
         else:
-            st.error("Failed to fetch S&P 500 data. Please check your internet connection and try again.")
+            st.error(f"Failed to fetch {st.session_state.selected_index} data. Please check your internet connection and try again.")
 
 # Create tabs with icons for better visual organization
 tabs = st.tabs([

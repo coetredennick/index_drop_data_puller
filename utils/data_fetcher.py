@@ -5,19 +5,45 @@ import streamlit as st
 from datetime import datetime, timedelta
 import os
 
+# Dictionary mapping index names to their Yahoo Finance symbols and volatility indexes
+INDEX_MAPPING = {
+    "S&P 500": {
+        "symbol": "^GSPC",
+        "volatility_index": "^VIX",
+        "description": "Standard & Poor's 500 - Large-cap U.S. stocks"
+    },
+    "Nasdaq": {
+        "symbol": "^IXIC",
+        "volatility_index": "^VXN",
+        "description": "Nasdaq Composite - Tech-heavy U.S. stocks"
+    },
+    "Dow Jones": {
+        "symbol": "^DJI",
+        "volatility_index": "^VXD",
+        "description": "Dow Jones Industrial Average - 30 large U.S. companies"
+    },
+    "Russell 2000": {
+        "symbol": "^RUT",
+        "volatility_index": "^RVX",
+        "description": "Russell 2000 - Small-cap U.S. stocks"
+    }
+}
+
 @st.cache_data(ttl=1800)  # Cache data for 30 minutes
-def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retry_delay=5):
+def fetch_market_data(index_name="S&P 500", start_date=None, end_date=None, include_volatility=True, max_retries=3, retry_delay=5):
     """
-    Fetch S&P 500 historical data from Yahoo Finance with improved robustness
+    Fetch market index data from Yahoo Finance with improved robustness
     
     Parameters:
     -----------
+    index_name : str
+        Name of the index to fetch ("S&P 500", "Nasdaq", "Dow Jones", or "Russell 2000")
     start_date : str
         Start date in the format 'YYYY-MM-DD'
     end_date : str
         End date in the format 'YYYY-MM-DD'
-    include_vix : bool, optional
-        Whether to include VIX data (default: True)
+    include_volatility : bool, optional
+        Whether to include volatility index data (default: True)
     max_retries : int, optional
         Maximum number of download retries (default: 3)
     retry_delay : int, optional
@@ -26,8 +52,17 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
     Returns:
     --------
     pandas.DataFrame
-        DataFrame containing S&P 500 historical data with VIX data if requested
+        DataFrame containing market index data with volatility data if requested
     """
+    
+    # For backward compatibility with code that calls fetch_sp500_data
+    if index_name not in INDEX_MAPPING:
+        st.warning(f"Unknown index: {index_name}. Defaulting to S&P 500.")
+        index_name = "S&P 500"
+    
+    # Get the Yahoo Finance symbol for the selected index
+    index_symbol = INDEX_MAPPING[index_name]["symbol"]
+    volatility_symbol = INDEX_MAPPING[index_name]["volatility_index"]
     import time
     
     # Record the attempt count
@@ -38,13 +73,13 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
     start_dt = pd.to_datetime(start_date)
     end_dt = pd.to_datetime(end_date)
     
-    # Initialize sp500 as None to handle cases where we don't execute the if or else blocks
-    sp500 = None
+    # Initialize market_data as None to handle cases where we don't execute the if or else blocks
+    market_data = None
     
     # For all date ranges, use daily data but handle long periods differently
     if (end_dt - start_dt) > timedelta(days=365*5):  # Use chunking for periods over 5 years
         try:
-            st.info("Fetching long-term data in chunks to avoid rate limiting...")
+            st.info(f"Fetching long-term {index_name} data in chunks to avoid rate limiting...")
             
             # Split into chunks of 1 year each
             chunks = []
@@ -67,7 +102,7 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
                 while chunk_attempts < max_retries:
                     try:
                         chunk_data = yf.download(
-                            "^GSPC",
+                            index_symbol,
                             start=chunk_start,
                             end=chunk_end,
                             progress=False
@@ -100,20 +135,20 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
             
             # Combine all chunks
             if all_data:
-                sp500 = pd.concat(all_data, axis=0)
-                if not sp500.empty:
-                    sp500 = sp500[~sp500.index.duplicated(keep='first')]  # Remove duplicate indices
+                market_data = pd.concat(all_data, axis=0)
+                if not market_data.empty:
+                    market_data = market_data[~market_data.index.duplicated(keep='first')]  # Remove duplicate indices
                     
                     # Fix for MultiIndex columns
-                    if isinstance(sp500.columns, pd.MultiIndex):
-                        sp500.columns = [col[0] for col in sp500.columns]
+                    if isinstance(market_data.columns, pd.MultiIndex):
+                        market_data.columns = [col[0] for col in market_data.columns]
                     
-                    st.success(f"Successfully fetched data for {len(sp500)} trading days!")
+                    st.success(f"Successfully fetched {index_name} data for {len(market_data)} trading days!")
                 else:
-                    st.warning("After combining chunks, no data was available.")
+                    st.warning(f"After combining chunks, no {index_name} data was available.")
                     return None
             else:
-                st.warning("No data available for the given date range.")
+                st.warning(f"No {index_name} data available for the given date range.")
                 return None
                 
         except Exception as e:
@@ -121,21 +156,21 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
             # Continue with normal approach as fallback
             pass
     
-    # If sp500 is still None (chunking failed or wasn't used), try the normal approach
-    if sp500 is None or sp500.empty:
+    # If market_data is still None (chunking failed or wasn't used), try the normal approach
+    if market_data is None or market_data.empty:
         # Normal approach with retries for rate limiting
         while attempts < max_retries:
             try:
                 # Attempt to fetch data
-                sp500 = yf.download(
-                    "^GSPC",
+                market_data = yf.download(
+                    index_symbol,
                     start=start_date,
                     end=end_date,
                     progress=False
                 )
                 
                 # Break the loop if successful
-                if not sp500.empty:
+                if not market_data.empty:
                     break
                 
                 # If we got empty data, try again
@@ -152,125 +187,179 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retr
                     st.warning(f"Yahoo Finance rate limit reached. Retry {attempts}/{max_retries} after delay...")
                     time.sleep(retry_delay * 2)  # Longer delay for rate limits
                 else:
-                    st.error(f"Error fetching S&P 500 data: {e}. Retry {attempts}/{max_retries}...")
+                    st.error(f"Error fetching {index_name} data: {e}. Retry {attempts}/{max_retries}...")
                     time.sleep(retry_delay)
                 
                 # If we've reached max retries, return None
                 if attempts >= max_retries:
-                    st.error(f"Failed to fetch S&P 500 data after {max_retries} attempts. Please try again later.")
+                    st.error(f"Failed to fetch {index_name} data after {max_retries} attempts. Please try again later.")
                     return None
     
     # Basic data cleaning
-    if sp500 is None or sp500.empty:
-        st.warning("No S&P 500 data available for the given date range.")
+    if market_data is None or market_data.empty:
+        st.warning(f"No {index_name} data available for the given date range.")
         return None
     
     try:
         # Fix for MultiIndex columns - flatten the columns
-        if isinstance(sp500.columns, pd.MultiIndex):
-            sp500.columns = [col[0] for col in sp500.columns]
+        if isinstance(market_data.columns, pd.MultiIndex):
+            market_data.columns = [col[0] for col in market_data.columns]
             
         # Calculate daily returns
-        sp500['Return'] = sp500['Close'].pct_change() * 100
+        market_data['Return'] = market_data['Close'].pct_change() * 100
         
         # Calculate daily price change
-        sp500['Change'] = sp500['Close'] - sp500['Open']
-        sp500['Change_Pct'] = (sp500['Close'] - sp500['Open']) / sp500['Open'] * 100
+        market_data['Change'] = market_data['Close'] - market_data['Open']
+        market_data['Change_Pct'] = (market_data['Close'] - market_data['Open']) / market_data['Open'] * 100
         
         # Calculate high-low range
-        sp500['HL_Range'] = (sp500['High'] - sp500['Low']) / sp500['Open'] * 100
+        market_data['HL_Range'] = (market_data['High'] - market_data['Low']) / market_data['Open'] * 100
         
         # Forward returns for different time periods
         for days, label in [(1, '1D'), (2, '2D'), (3, '3D'), (5, '1W'), (21, '1M'), (63, '3M'), (126, '6M'), (252, '1Y'), (756, '3Y')]:
-            sp500[f'Fwd_Ret_{label}'] = sp500['Close'].pct_change(periods=days).shift(-days) * 100
+            market_data[f'Fwd_Ret_{label}'] = market_data['Close'].pct_change(periods=days).shift(-days) * 100
         
-        # Fetch VIX data if requested
-        if include_vix:
-            vix_attempts = 0
-            while vix_attempts < max_retries:
+        # Add index identifier field
+        market_data['Index'] = index_name
+        
+        # Fetch volatility data if requested
+        if include_volatility:
+            vol_attempts = 0
+            while vol_attempts < max_retries:
                 try:
-                    # Fetch VIX data
-                    vix_data = yf.download(
-                        "^VIX",
+                    # Fetch volatility index data
+                    vol_data = yf.download(
+                        volatility_symbol,
                         start=start_date,
                         end=end_date,
                         progress=False
                     )
                     
-                    if not vix_data.empty:
+                    if not vol_data.empty:
                         # Fix for MultiIndex columns - flatten the columns
-                        if isinstance(vix_data.columns, pd.MultiIndex):
-                            vix_data.columns = [f'VIX_{col[0]}' for col in vix_data.columns]
+                        if isinstance(vol_data.columns, pd.MultiIndex):
+                            vol_data.columns = [f'VOL_{col[0]}' for col in vol_data.columns]
                         else:
-                            vix_data.columns = [f'VIX_{col}' for col in vix_data.columns]
+                            vol_data.columns = [f'VOL_{col}' for col in vol_data.columns]
                         
-                        # Calculate VIX daily changes and returns
-                        vix_data['VIX_Return'] = vix_data['VIX_Close'].pct_change() * 100
+                        # Calculate volatility index daily changes and returns
+                        vol_data['VOL_Return'] = vol_data['VOL_Close'].pct_change() * 100
                         
-                        # Add a 5-day rolling average of VIX (used as a feature in ML models)
-                        vix_data['VIX_5D_Avg'] = vix_data['VIX_Close'].rolling(window=5).mean()
+                        # Add rolling averages of volatility (used as features in ML models)
+                        vol_data['VOL_5D_Avg'] = vol_data['VOL_Close'].rolling(window=5).mean()
+                        vol_data['VOL_20D_Avg'] = vol_data['VOL_Close'].rolling(window=20).mean()
                         
-                        # Add a 20-day rolling average of VIX (used as a feature in ML models)
-                        vix_data['VIX_20D_Avg'] = vix_data['VIX_Close'].rolling(window=20).mean()
-                        
-                        # Calculate VIX relative to its moving averages
-                        vix_data['VIX_Rel_5D'] = (vix_data['VIX_Close'] / vix_data['VIX_5D_Avg'] - 1) * 100
-                        vix_data['VIX_Rel_20D'] = (vix_data['VIX_Close'] / vix_data['VIX_20D_Avg'] - 1) * 100
+                        # Calculate volatility relative to its moving averages
+                        vol_data['VOL_Rel_5D'] = (vol_data['VOL_Close'] / vol_data['VOL_5D_Avg'] - 1) * 100
+                        vol_data['VOL_Rel_20D'] = (vol_data['VOL_Close'] / vol_data['VOL_20D_Avg'] - 1) * 100
                         
                         # Calculate high-low volatility range
-                        vix_data['VIX_HL_Range'] = (vix_data['VIX_High'] - vix_data['VIX_Low']) / vix_data['VIX_Open'] * 100
+                        vol_data['VOL_HL_Range'] = (vol_data['VOL_High'] - vol_data['VOL_Low']) / vol_data['VOL_Open'] * 100
                         
-                        # Join VIX data with S&P 500 data
-                        sp500 = sp500.join(vix_data[[
-                            'VIX_Close', 'VIX_Return', 'VIX_5D_Avg', 'VIX_20D_Avg', 
-                            'VIX_Rel_5D', 'VIX_Rel_20D', 'VIX_HL_Range'
+                        # Join volatility data with market index data
+                        market_data = market_data.join(vol_data[[
+                            'VOL_Close', 'VOL_Return', 'VOL_5D_Avg', 'VOL_20D_Avg', 
+                            'VOL_Rel_5D', 'VOL_Rel_20D', 'VOL_HL_Range'
                         ]])
                         
-                        # Fill any NaN values in VIX columns with forward filling, then backward filling
-                        vix_cols = [col for col in sp500.columns if col.startswith('VIX_')]
-                        if vix_cols:
+                        # Fill any NaN values in volatility columns with forward filling, then backward filling
+                        vol_cols = [col for col in market_data.columns if col.startswith('VOL_')]
+                        if vol_cols:
                             # Use ffill() and bfill() methods to avoid deprecation warning
-                            sp500[vix_cols] = sp500[vix_cols].ffill().bfill()
+                            market_data[vol_cols] = market_data[vol_cols].ffill().bfill()
                         
                         # Break the loop if successful
                         break
                     else:
                         # If we got empty data, try again
-                        vix_attempts += 1
-                        if vix_attempts < max_retries:
+                        vol_attempts += 1
+                        if vol_attempts < max_retries:
                             time.sleep(retry_delay)
                         else:
-                            # After max retries, just continue without VIX data
-                            st.info("VIX data not available, continuing without volatility metrics.")
+                            # After max retries, just continue without volatility data
+                            st.info(f"Volatility data for {index_name} not available, continuing without volatility metrics.")
                     
                 except Exception as e:
-                    vix_attempts += 1
+                    vol_attempts += 1
                     error_msg = str(e)
                     
                     # Special handling for rate limit errors
-                    if vix_attempts < max_retries and ("Rate limited" in error_msg or "Too Many Requests" in error_msg):
+                    if vol_attempts < max_retries and ("Rate limited" in error_msg or "Too Many Requests" in error_msg):
                         time.sleep(retry_delay * 2)  # Longer delay for rate limits
                     else:
-                        # After max retries or for other errors, just continue without VIX data
-                        st.info(f"VIX data not available (Error: {e}), continuing without volatility metrics.")
+                        # After max retries or for other errors, just continue without volatility data
+                        st.info(f"Volatility data for {index_name} not available (Error: {e}), continuing without volatility metrics.")
                         break
         
-        return sp500
+        return market_data
         
     except Exception as e:
-        st.error(f"Error processing S&P 500 data: {e}")
+        st.error(f"Error processing {index_name} data: {e}")
         return None
 
+# Backward compatibility function for existing code
+def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=3, retry_delay=5):
+    """
+    Backward compatibility function for existing code that uses fetch_sp500_data
+    """
+    return fetch_market_data(
+        index_name="S&P 500",
+        start_date=start_date,
+        end_date=end_date,
+        include_volatility=include_vix,
+        max_retries=max_retries,
+        retry_delay=retry_delay
+    )
+
 @st.cache_data(ttl=86400)  # Cache for 24 hours
+def get_market_components(index_name="S&P 500"):
+    """
+    Fetch the components of the selected market index
+    
+    Parameters:
+    -----------
+    index_name : str
+        Name of the index to fetch components for
+        
+    Returns:
+    --------
+    pandas.DataFrame or None
+        DataFrame containing index components, or None if not available
+    """
+    try:
+        if index_name == "S&P 500":
+            url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+            tables = pd.read_html(url)
+            df = tables[0]
+            return df
+        elif index_name == "Dow Jones":
+            url = "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"
+            tables = pd.read_html(url)
+            # The DJIA components are typically in the first table
+            df = tables[1]  # May need to adjust based on Wikipedia page structure
+            return df
+        elif index_name == "Nasdaq":
+            # For Nasdaq-100, not the full composite
+            url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+            tables = pd.read_html(url)
+            df = tables[4]  # May need to adjust based on Wikipedia page structure
+            return df
+        elif index_name == "Russell 2000":
+            # Russell 2000 has too many components to fetch easily
+            # Return a message instead
+            st.info("Russell 2000 has 2000 components, too many to display in the application.")
+            return None
+        else:
+            st.warning(f"Components for {index_name} are not available.")
+            return None
+    except Exception as e:
+        st.error(f"Error fetching {index_name} components: {e}")
+        return None
+
+# For backward compatibility
 def get_sp500_components():
     """Fetch the current components of the S&P 500 index"""
-    try:
-        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        tables = pd.read_html(url)
-        df = tables[0]
-        return df
-    except:
-        return None
+    return get_market_components("S&P 500")
 
 def cache_data(data, drop_events, consecutive_drop_events):
     """
@@ -279,7 +368,7 @@ def cache_data(data, drop_events, consecutive_drop_events):
     Parameters:
     -----------
     data : pandas.DataFrame
-        S&P 500 data with technical indicators
+        Market data with technical indicators
     drop_events : list
         List of single-day drop events
     consecutive_drop_events : list
@@ -289,6 +378,26 @@ def cache_data(data, drop_events, consecutive_drop_events):
     # But we'll keep it for future enhancements
     pass
 
+def get_latest_market_data(index_name="S&P 500"):
+    """
+    Get the latest market data for the current market conditions tab
+    
+    Parameters:
+    -----------
+    index_name : str
+        Name of the index to fetch data for
+        
+    Returns:
+    --------
+    pandas.DataFrame
+        DataFrame containing the latest market data (60 days)
+    """
+    end_date = datetime.today().strftime('%Y-%m-%d')
+    start_date = (datetime.today() - timedelta(days=60)).strftime('%Y-%m-%d')
+    
+    return fetch_market_data(index_name, start_date, end_date)
+
+# For backward compatibility
 def get_latest_sp500_data():
     """
     Get the latest S&P 500 data for the current market conditions tab
@@ -296,9 +405,6 @@ def get_latest_sp500_data():
     Returns:
     --------
     pandas.DataFrame
-        DataFrame containing the latest S&P 500 data (30 days)
+        DataFrame containing the latest S&P 500 data (60 days)
     """
-    end_date = datetime.today().strftime('%Y-%m-%d')
-    start_date = (datetime.today() - timedelta(days=60)).strftime('%Y-%m-%d')
-    
-    return fetch_sp500_data(start_date, end_date)
+    return get_latest_market_data("S&P 500")
