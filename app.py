@@ -8,7 +8,7 @@ import sys
 # Add utils to path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from utils.data_fetcher import fetch_market_data, cache_data, INDEX_MAPPING
+from utils.data_fetcher import fetch_sp500_data, cache_data
 from utils.technical_indicators import calculate_technical_indicators
 from utils.event_detection import detect_drop_events, detect_consecutive_drops
 from pages.historical_performance import show_historical_performance
@@ -16,7 +16,7 @@ from pages.ml_predictions_new import show_ml_predictions
 
 # Configure the page
 st.set_page_config(
-    page_title="Market Drop Analyzer",
+    page_title="S&P 500 Market Drop Analyzer",
     page_icon="📉",
     layout="wide",
     initial_sidebar_state="collapsed"  # Explicitly collapse the sidebar
@@ -163,7 +163,7 @@ st.markdown("""
 # Cleaner title and description layout
 st.markdown("""
 <div style="text-align: center; padding: 1rem 0; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 1rem;">
-    <h1 style="margin: 0; padding: 0; color: #1E4A7B;">Market Drop Analyzer</h1>
+    <h1 style="margin: 0; padding: 0; color: #1E4A7B;">S&P 500 Market Drop Analyzer</h1>
     <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #5A6570;">
         A data-driven tool for analyzing market corrections and forecasting recovery patterns
     </p>
@@ -177,9 +177,7 @@ if 'drop_threshold' not in st.session_state:
 if 'consecutive_days' not in st.session_state:
     st.session_state.consecutive_days = 1
 if 'date_range' not in st.session_state:
-    # Use a more recent period by default (last 2 years) to avoid rate limits
-    two_years_ago = (datetime.today() - timedelta(days=365*2)).strftime('%Y-%m-%d')
-    st.session_state.date_range = (two_years_ago, datetime.today().strftime('%Y-%m-%d'))
+    st.session_state.date_range = ('1990-01-01', datetime.today().strftime('%Y-%m-%d'))
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'drop_events' not in st.session_state:
@@ -190,28 +188,14 @@ if 'selected_event' not in st.session_state:
     st.session_state.selected_event = None
 if 'current_event_type_filter' not in st.session_state:
     st.session_state.current_event_type_filter = 'all'
-if 'selected_index' not in st.session_state:
-    st.session_state.selected_index = "S&P 500"
 
 # Main page settings in a clean container
 # Use a form to prevent reloads when adjusting sliders
 with st.form(key="analysis_settings_form"):
-    # Use three columns for a cleaner layout - left for market selection, middle for dates, right for thresholds
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # Use two columns for a cleaner layout - left for dates, right for thresholds
+    col1, col2 = st.columns([1, 1])
     
     with col1:
-        st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Market Index</h4>", unsafe_allow_html=True)
-        
-        # Create market index selection dropdown
-        market_index = st.selectbox(
-            "Select Market Index",
-            options=list(INDEX_MAPPING.keys()),
-            index=list(INDEX_MAPPING.keys()).index(st.session_state.selected_index),
-            format_func=lambda x: f"{x} ({INDEX_MAPPING[x]['description']})",
-            key="market_index"
-        )
-    
-    with col2:
         st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Date Range</h4>", unsafe_allow_html=True)
         date_col1, date_col2 = st.columns(2)
         
@@ -233,7 +217,7 @@ with st.form(key="analysis_settings_form"):
                 key="end_date"
             )
     
-    with col3:
+    with col2:
         st.markdown("<h4 style='font-size: 1rem; margin-bottom: 0.7rem;'>Drop Event Detection</h4>", unsafe_allow_html=True)
         
         drop_threshold = st.slider(
@@ -268,7 +252,6 @@ with st.form(key="analysis_settings_form"):
 # Process form submission outside the form block
 if submit_button:
     # Update session state
-    st.session_state.selected_index = market_index
     st.session_state.drop_threshold = drop_threshold
     st.session_state.consecutive_days = consecutive_days if use_consecutive else 1
     st.session_state.date_range = (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
@@ -280,56 +263,37 @@ if submit_button:
     st.session_state.selected_event = None
     
     # Show info message
-    st.success(f"✅ Settings applied! {market_index} data will be refreshed.")
+    st.success("✅ Settings applied! Data will be refreshed.")
     st.rerun()
 
 # Data source info with improved styling
-st.markdown(f"""
+st.markdown("""
 <div style="text-align: right; font-size: 0.8em; color: #5A6570; margin-top: -0.5rem; margin-bottom: 0.7rem;">
     <span style="background-color: #f0f2f6; padding: 0.2rem 0.5rem; border-radius: 3px;">
-        <i>Data source: Yahoo Finance ({INDEX_MAPPING[st.session_state.selected_index]['symbol']})</i>
+        <i>Data source: Yahoo Finance (^GSPC)</i>
     </span>
 </div>
 """, unsafe_allow_html=True)
 
 # Main content
 # Fetch and process data
-with st.spinner(f"Fetching {st.session_state.selected_index} data..."):
+with st.spinner("Fetching S&P 500 data..."):
     # Check if we need to reload data based on settings changes
     reload_data = False
     if st.session_state.data is None:
         reload_data = True
     elif not all(date in st.session_state.data.index for date in [st.session_state.date_range[0], st.session_state.date_range[1]]):
         reload_data = True
-    elif 'Index' in st.session_state.data.columns and st.session_state.data['Index'].iloc[0] != st.session_state.selected_index:
-        reload_data = True
     
     if reload_data:
-        # Create a status message area
-        status_msg = st.empty()
-        
-        # Add a delay before fetching to reduce rate limit issues
-        import time
-        status_msg.info(f"Preparing to fetch {st.session_state.selected_index} data with delay timer...")
-        time.sleep(3)  # Short delay before starting the fetch
-        
-        # Fetch data for the selected index
-        status_msg.info(f"Fetching {st.session_state.selected_index} data from {st.session_state.date_range[0]} to {st.session_state.date_range[1]}...")
-        data = fetch_market_data(
-            index_name=st.session_state.selected_index,
-            start_date=st.session_state.date_range[0], 
-            end_date=st.session_state.date_range[1],
-            max_retries=5,  # Increase retries
-            retry_delay=10  # Longer delay between retries
-        )
+        # Fetch data
+        data = fetch_sp500_data(st.session_state.date_range[0], st.session_state.date_range[1])
         
         if data is not None and not data.empty:
             # Calculate technical indicators
-            status_msg.info("Calculating technical indicators...")
             data = calculate_technical_indicators(data)
             
             # Detect drop events
-            status_msg.info("Detecting market drop events...")
             drop_events = detect_drop_events(data, st.session_state.drop_threshold)
             
             consecutive_drop_events = detect_consecutive_drops(
@@ -345,32 +309,14 @@ with st.spinner(f"Fetching {st.session_state.selected_index} data..."):
             
             # Cache data
             cache_data(data, drop_events, consecutive_drop_events)
-            
-            # Show success message
-            status_msg.success(f"Successfully loaded {st.session_state.selected_index} data with {len(data)} days")
         else:
-            status_msg.error(f"Failed to fetch {st.session_state.selected_index} data. Please try a shorter date range or wait a few minutes before trying again.")
+            st.error("Failed to fetch S&P 500 data. Please check your internet connection and try again.")
 
 # Create tabs with icons for better visual organization
 tabs = st.tabs([
     "📈 Historical Performance", 
     "🤖 ML Predictions"
 ])
-
-# Add a note about API rate limits at the top of the page
-st.markdown("""
-<div style="border-left: 3px solid #FF9800; padding: 10px; background-color: #FFF8E1; margin-bottom: 15px;">
-    <p style="margin: 0; font-size: 0.9em;">
-        <strong>Note:</strong> This app uses Yahoo Finance data which has rate limits. 
-        For best results:
-        <ul style="margin: 5px 0 0 15px; padding: 0;">
-            <li>Use shorter date ranges (1-2 years)</li>
-            <li>Allow time between selecting different market indices</li>
-            <li>Be patient during data loading - sequential fetching with delays is used</li>
-        </ul>
-    </p>
-</div>
-""", unsafe_allow_html=True)
 
 # Add a light separator before tabs content
 st.markdown('<hr style="margin-top: 0; margin-bottom: 15px; border: none; height: 1px; background-color: #f0f2f6;">', unsafe_allow_html=True)
