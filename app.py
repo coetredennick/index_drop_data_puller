@@ -177,7 +177,9 @@ if 'drop_threshold' not in st.session_state:
 if 'consecutive_days' not in st.session_state:
     st.session_state.consecutive_days = 1
 if 'date_range' not in st.session_state:
-    st.session_state.date_range = ('2020-01-01', datetime.today().strftime('%Y-%m-%d'))
+    # Use a more recent period by default (last 2 years) to avoid rate limits
+    two_years_ago = (datetime.today() - timedelta(days=365*2)).strftime('%Y-%m-%d')
+    st.session_state.date_range = (two_years_ago, datetime.today().strftime('%Y-%m-%d'))
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'drop_events' not in st.session_state:

@@ -10,24 +10,37 @@ INDEX_MAPPING = {
     "S&P 500": {
         "symbol": "^GSPC",
         "volatility_index": "^VIX",
-        "description": "Standard & Poor's 500 - Large-cap U.S. stocks"
+        "description": "Standard & Poor's 500 - Large-cap U.S. stocks",
+        "sample_ticker": "SPY"  # ETF tracking S&P 500
     },
     "Nasdaq": {
         "symbol": "^IXIC",
         "volatility_index": "^VXN",
-        "description": "Nasdaq Composite - Tech-heavy U.S. stocks"
+        "description": "Nasdaq Composite - Tech-heavy U.S. stocks",
+        "sample_ticker": "QQQ"  # ETF tracking Nasdaq-100
     },
     "Dow Jones": {
         "symbol": "^DJI",
         "volatility_index": "^VXD",
-        "description": "Dow Jones Industrial Average - 30 large U.S. companies"
+        "description": "Dow Jones Industrial Average - 30 large U.S. companies",
+        "sample_ticker": "DIA"  # ETF tracking Dow Jones
     },
     "Russell 2000": {
         "symbol": "^RUT",
         "volatility_index": "^RVX",
-        "description": "Russell 2000 - Small-cap U.S. stocks"
+        "description": "Russell 2000 - Small-cap U.S. stocks",
+        "sample_ticker": "IWM"  # ETF tracking Russell 2000
     }
 }
+
+# Use exponential backoff for retries
+import random
+def calculate_backoff_time(attempt, base_delay=5, max_delay=60):
+    """Calculate exponential backoff time with jitter for retries"""
+    delay = min(max_delay, base_delay * (2 ** attempt))
+    # Add jitter to avoid thundering herd problem
+    jitter = random.uniform(0, 0.5 * delay)
+    return delay + jitter
 
 @st.cache_data(ttl=1800)  # Cache data for 30 minutes
 def fetch_market_data(index_name="S&P 500", start_date=None, end_date=None, include_volatility=True, max_retries=3, retry_delay=5):
@@ -99,17 +112,71 @@ def fetch_market_data(index_name="S&P 500", start_date=None, end_date=None, incl
                     time.sleep(retry_delay)
                 
                 chunk_attempts = 0
+                
                 while chunk_attempts < max_retries:
                     try:
-                        chunk_data = yf.download(
-                            index_symbol,
-                            start=chunk_start,
-                            end=chunk_end,
-                            progress=False
-                        )
+                        # Add a longer delay between attempts with exponential backoff
+                        if chunk_attempts > 0:
+                            backoff_time = calculate_backoff_time(chunk_attempts, base_delay=retry_delay)
+                            st.info(f"Waiting {backoff_time:.1f}s before retry...")
+                            time.sleep(backoff_time)
+                        
+                        # Use a smaller date range to reduce the chance of rate limiting
+                        # Split this chunk into even smaller pieces if needed
+                        current_chunk_start = pd.to_datetime(chunk_start)
+                        current_chunk_end = pd.to_datetime(chunk_end)
+                        
+                        # If this chunk is more than 90 days, split it further for index data
+                        if (current_chunk_end - current_chunk_start).days > 90:
+                            st.info(f"Splitting large date range into smaller chunks to avoid rate limits...")
+                            mini_chunks = []
+                            mini_start = current_chunk_start
+                            while mini_start < current_chunk_end:
+                                mini_end = min(mini_start + timedelta(days=90), current_chunk_end)
+                                mini_chunks.append((mini_start.strftime('%Y-%m-%d'), mini_end.strftime('%Y-%m-%d')))
+                                mini_start = mini_end + timedelta(days=1)
+                            
+                            # Fetch data for each mini-chunk
+                            mini_data = []
+                            for j, (mini_chunk_start, mini_chunk_end) in enumerate(mini_chunks):
+                                st.info(f"Fetching mini-chunk {j+1}/{len(mini_chunks)}: {mini_chunk_start} to {mini_chunk_end}")
+                                
+                                # Add delay between mini-chunks
+                                if j > 0:
+                                    time.sleep(retry_delay * 2)  # Longer delay between mini-chunks
+                                
+                                # Download the mini-chunk
+                                mini_chunk_data = yf.download(
+                                    index_symbol,
+                                    start=mini_chunk_start,
+                                    end=mini_chunk_end,
+                                    progress=False
+                                )
+                                
+                                if not mini_chunk_data.empty:
+                                    mini_data.append(mini_chunk_data)
+                                else:
+                                    st.warning(f"Received empty data for mini-chunk {j+1}.")
+                            
+                            # Combine mini chunks
+                            if mini_data:
+                                chunk_data = pd.concat(mini_data, axis=0)
+                                chunk_data = chunk_data[~chunk_data.index.duplicated(keep='first')]
+                            else:
+                                # If all mini-chunks failed, we have empty data
+                                chunk_data = pd.DataFrame()
+                        else:
+                            # If chunk is already small enough, just fetch directly
+                            chunk_data = yf.download(
+                                index_symbol,
+                                start=chunk_start,
+                                end=chunk_end,
+                                progress=False
+                            )
                         
                         if not chunk_data.empty:
                             all_data.append(chunk_data)
+                            st.success(f"Successfully fetched data for {chunk_start} to {chunk_end}")
                             break
                         else:
                             chunk_attempts += 1
@@ -122,8 +189,9 @@ def fetch_market_data(index_name="S&P 500", start_date=None, end_date=None, incl
                         
                         # Special handling for rate limit errors
                         if "Rate limited" in error_msg or "Too Many Requests" in error_msg:
-                            st.warning(f"Yahoo Finance rate limit reached. Retry {chunk_attempts}/{max_retries} after delay...")
-                            time.sleep(retry_delay * 3)  # Longer delay for rate limits
+                            backoff_time = calculate_backoff_time(chunk_attempts, base_delay=retry_delay*2)
+                            st.warning(f"Yahoo Finance rate limit reached. Waiting {backoff_time:.1f}s before retry {chunk_attempts}/{max_retries}...")
+                            time.sleep(backoff_time)
                         else:
                             st.error(f"Error fetching chunk: {e}. Retry {chunk_attempts}/{max_retries}...")
                             time.sleep(retry_delay)
