@@ -177,9 +177,7 @@ if 'drop_threshold' not in st.session_state:
 if 'consecutive_days' not in st.session_state:
     st.session_state.consecutive_days = 1
 if 'date_range' not in st.session_state:
-    # Set a default date range - 20 years back from today to today
-    twenty_years_ago = (datetime.today() - timedelta(days=365*20)).strftime('%Y-%m-%d')
-    st.session_state.date_range = (twenty_years_ago, datetime.today().strftime('%Y-%m-%d'))
+    st.session_state.date_range = ('1990-01-01', datetime.today().strftime('%Y-%m-%d'))
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'drop_events' not in st.session_state:
@@ -280,45 +278,6 @@ st.markdown("""
 # Main content
 # Fetch and process data
 with st.spinner("Fetching S&P 500 data..."):
-    # Add API settings option
-    with st.expander("Data Fetch Settings (Advanced)"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Allow users to enter their own API key for higher rate limits
-            use_api_key = st.checkbox("Use Your Yahoo Finance API Key", value=False, 
-                                 help="Enable to use your own API key for higher rate limits")
-            
-            if use_api_key:
-                yf_api_key = st.text_input("Yahoo Finance API Key", type="password",
-                                      help="Enter your Yahoo Finance API key for higher rate limits")
-                if yf_api_key:
-                    st.success("API key entered!")
-                    # Store the API key in session state for use in data fetching
-                    st.session_state.yf_api_key = yf_api_key
-            
-            # Option to use demo data when Yahoo Finance is unavailable
-            if 'use_demo_data' not in st.session_state:
-                st.session_state.use_demo_data = False
-                
-            use_demo_data = st.checkbox("Use Demo Data", value=st.session_state.use_demo_data,
-                                   help="Use demonstration data when Yahoo Finance is unavailable due to rate limits")
-            
-            # Store the demo data preference in session state
-            if use_demo_data != st.session_state.use_demo_data:
-                st.session_state.use_demo_data = use_demo_data
-            
-            # Shorter time range for reduced API load
-            shorter_range = st.checkbox("Use Shorter Time Range", value=True, 
-                                   help="Recommended when facing API rate limits")
-        
-        with col2:
-            retries = st.slider("Max Retries", min_value=1, max_value=10, value=5,
-                           help="Number of retry attempts for API calls")
-            
-            delay = st.slider("Retry Delay (seconds)", min_value=1, max_value=10, value=2,
-                         help="Delay between retry attempts")
-    
     # Check if we need to reload data based on settings changes
     reload_data = False
     if st.session_state.data is None:
@@ -327,101 +286,8 @@ with st.spinner("Fetching S&P 500 data..."):
         reload_data = True
     
     if reload_data:
-        # If shorter range is enabled, adjust the date range to reduce API load
-        if shorter_range:
-            # Calculate a shorter date range (last 1 year or user selection, whichever is shorter)
-            end_date_dt = pd.to_datetime(st.session_state.date_range[1])
-            one_year_ago = (end_date_dt - timedelta(days=365)).strftime('%Y-%m-%d')
-            adjusted_start_date = max(one_year_ago, st.session_state.date_range[0])
-            
-            # Notify user of adjustment
-            if adjusted_start_date != st.session_state.date_range[0]:
-                st.info(f"Date range adjusted to 1 year to reduce API load: {adjusted_start_date} to {st.session_state.date_range[1]}")
-                fetch_start_date = adjusted_start_date
-            else:
-                fetch_start_date = st.session_state.date_range[0]
-        else:
-            fetch_start_date = st.session_state.date_range[0]
-        
-        # Set a much smaller date range for initial testing
-        today = datetime.today()
-        recent_start_date = (today - timedelta(days=30)).strftime('%Y-%m-%d')
-        
-        # For initial loading, use a very recent, small dataset to avoid rate limits
-        if st.session_state.data is None and shorter_range:
-            st.info("Loading a recent 30-day sample first to initialize the app. You can load more data after this.")
-            fetch_start_date = recent_start_date
-        
-        # Check if user provided an API key
-        api_key = st.session_state.get('yf_api_key', None)
-        
-        # Attempt to fetch data from Yahoo Finance
-        data = None
-        
-        # First, try the standard method with yfinance
-        try:
-            data = fetch_sp500_data(
-                fetch_start_date, 
-                st.session_state.date_range[1],
-                max_retries=retries,
-                retry_delay=delay,
-                api_key=api_key
-            )
-        except Exception as e:
-            st.error(f"Error fetching data: {e}")
-        
-        # If standard method fails, offer alternative data source
-        if data is None or data.empty:
-            st.warning("Yahoo Finance API couldn't provide data. Try our alternative data source for reliable S&P 500 historical data.")
-            
-            # Create a clear button for alternative source
-            if st.button("📈 Fetch Data Using FRED or Pandas-Datareader"):
-                with st.spinner("Fetching data from verified alternative sources..."):
-                    try:
-                        # Import the alternative data source module
-                        from utils.alternative_data_source import fetch_sp500_alternative
-                        
-                        # Fetch data using pandas-datareader
-                        data = fetch_sp500_alternative(
-                            fetch_start_date,
-                            st.session_state.date_range[1],
-                            max_retries=retries,
-                            retry_delay=delay
-                        )
-                        
-                        if data is not None and not data.empty:
-                            st.success(f"✅ Successfully retrieved {len(data)} days of authentic market data!")
-                        else:
-                            st.error("Unable to retrieve data from alternative sources.")
-                    except Exception as alt_error:
-                        st.error(f"Error retrieving data: {alt_error}")
-        
-        # If API rate limit error occurred
-        if data is None:
-            # Show friendly guidance
-            st.warning("""
-            We're having trouble accessing market data from Yahoo Finance. This could be due to:
-            
-            1. API rate limits (very common)
-            2. Network connectivity issues
-            3. Data service availability
-            
-            **What you can do:**
-            - Try a smaller date range (e.g., last 3 months instead of multiple years)
-            - Wait a few minutes and try again
-            - Use the refresh button below
-            """)
-            
-            # Important - give user clear action steps
-            if st.button("⟳ Refresh Data (Try Again)"):
-                # Clear the cached API failure flag
-                if 'yahoo_finance_api_issues' in st.session_state:
-                    del st.session_state.yahoo_finance_api_issues
-                # Try a smaller date range automatically
-                if shorter_range:
-                    st.session_state.last_fetch_attempt = recent_start_date
-                st.session_state.data = None
-                st.rerun()
+        # Fetch data
+        data = fetch_sp500_data(st.session_state.date_range[0], st.session_state.date_range[1])
         
         if data is not None and not data.empty:
             # Calculate technical indicators
@@ -444,20 +310,7 @@ with st.spinner("Fetching S&P 500 data..."):
             # Cache data
             cache_data(data, drop_events, consecutive_drop_events)
         else:
-            st.error("Failed to fetch S&P 500 data due to API rate limits. Try again later or adjust the date range to a shorter period.")
-            
-            # Tips for API rate limit issues
-            with st.expander("Tips for handling API rate limits"):
-                st.markdown("""
-                **How to handle Yahoo Finance API rate limits:**
-                
-                1. **Try shorter time ranges** - Reduce the date range to 1 year or less
-                2. **Wait a few minutes** - The rate limits reset after a period of time
-                3. **Try again during off-peak hours** - API access may be more available
-                4. **Adjust the retry settings** - Increase delay between retry attempts
-                """)
-                
-                st.warning("Remember: This app relies on Yahoo Finance for real market data. Rate limits are a normal part of using their free API service.")
+            st.error("Failed to fetch S&P 500 data. Please check your internet connection and try again.")
 
 # Create tabs with icons for better visual organization
 tabs = st.tabs([

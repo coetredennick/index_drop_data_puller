@@ -172,16 +172,8 @@ def calculate_technical_indicators(data):
     df['Cum_VWAP'] = df['Daily_VWAP'].rolling(20).sum() / df['Volume'].rolling(20).sum()
     df['VWAP_Ratio'] = df['Close'] / df['Cum_VWAP']
     
-    # Clean up NaN values for essential indicators only if they exist
-    essential_columns = []
-    if 'RSI_14' in df.columns:
-        essential_columns.append('RSI_14')
-    if 'MACDh_12_26_9' in df.columns:
-        essential_columns.append('MACDh_12_26_9')
-    
-    # Only drop if we have essential columns
-    if essential_columns:
-        df = df.dropna(subset=essential_columns)
+    # Clean up NaN values for essential indicators
+    df = df.dropna(subset=['RSI_14', 'MACDh_12_26_9'])
     
     return df
 
