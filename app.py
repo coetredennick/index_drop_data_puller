@@ -8,7 +8,7 @@ import sys
 # Add utils to path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from utils.data_fetcher import fetch_sp500_data, fetch_market_data, cache_data
+from utils.data_fetcher import fetch_sp500_data, cache_data
 from utils.technical_indicators import calculate_technical_indicators
 from utils.event_detection import detect_drop_events, detect_consecutive_drops
 from pages.historical_performance import show_historical_performance
@@ -188,21 +188,6 @@ if 'selected_event' not in st.session_state:
     st.session_state.selected_event = None
 if 'current_event_type_filter' not in st.session_state:
     st.session_state.current_event_type_filter = 'all'
-    
-# Initialize data for each market index
-for index in ['sp500', 'nasdaq', 'dow']:
-    if f'{index}_data' not in st.session_state:
-        st.session_state[f'{index}_data'] = None
-    if f'{index}_drop_events' not in st.session_state:
-        st.session_state[f'{index}_drop_events'] = None
-    if f'{index}_consecutive_drop_events' not in st.session_state:
-        st.session_state[f'{index}_consecutive_drop_events'] = None
-        
-# Track which index tab is active and has been loaded
-if 'active_index' not in st.session_state:
-    st.session_state.active_index = 'sp500'  # Default to S&P 500
-if 'loaded_indices' not in st.session_state:
-    st.session_state.loaded_indices = set()  # Track which indices have been loaded
 
 # Main page settings in a clean container
 # Use a form to prevent reloads when adjusting sliders
@@ -271,20 +256,11 @@ if submit_button:
     st.session_state.consecutive_days = consecutive_days if use_consecutive else 1
     st.session_state.date_range = (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
     
-    # Reset data for all indices
-    for index in ['sp500', 'nasdaq', 'dow']:
-        st.session_state[f'{index}_data'] = None
-        st.session_state[f'{index}_drop_events'] = None
-        st.session_state[f'{index}_consecutive_drop_events'] = None
-    
-    # Also reset the legacy variables
+    # Reset data and events when settings change
     st.session_state.data = None
     st.session_state.drop_events = None
     st.session_state.consecutive_drop_events = None
     st.session_state.selected_event = None
-    
-    # Clear loaded indices
-    st.session_state.loaded_indices = set()
     
     # Show info message
     st.success("✅ Settings applied! Data will be refreshed.")
@@ -299,103 +275,58 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# We now fetch data on-demand in each tab instead of pre-loading it here
-# This allows users to only load data for markets they're interested in
+# Main content
+# Fetch and process data
+with st.spinner("Fetching S&P 500 data..."):
+    # Check if we need to reload data based on settings changes
+    reload_data = False
+    if st.session_state.data is None:
+        reload_data = True
+    elif not all(date in st.session_state.data.index for date in [st.session_state.date_range[0], st.session_state.date_range[1]]):
+        reload_data = True
+    
+    if reload_data:
+        # Fetch data
+        data = fetch_sp500_data(st.session_state.date_range[0], st.session_state.date_range[1])
+        
+        if data is not None and not data.empty:
+            # Calculate technical indicators
+            data = calculate_technical_indicators(data)
+            
+            # Detect drop events
+            drop_events = detect_drop_events(data, st.session_state.drop_threshold)
+            
+            consecutive_drop_events = detect_consecutive_drops(
+                data, 
+                st.session_state.drop_threshold, 
+                st.session_state.consecutive_days
+            ) if st.session_state.consecutive_days > 1 else None
+            
+            # Update session state
+            st.session_state.data = data
+            st.session_state.drop_events = drop_events
+            st.session_state.consecutive_drop_events = consecutive_drop_events
+            
+            # Cache data
+            cache_data(data, drop_events, consecutive_drop_events)
+        else:
+            st.error("Failed to fetch S&P 500 data. Please check your internet connection and try again.")
 
-# Create market index tabs with icons for better visual organization
-market_tabs = st.tabs([
-    "📈 S&P 500", 
-    "📊 NASDAQ",
-    "💼 Dow Jones"
+# Create tabs with icons for better visual organization
+tabs = st.tabs([
+    "📈 Historical Performance", 
+    "🤖 ML Predictions"
 ])
-
-# Define market ticker mapping
-market_tickers = {
-    0: {"name": "S&P 500", "ticker": "^GSPC", "key": "sp500"},
-    1: {"name": "NASDAQ", "ticker": "^IXIC", "key": "nasdaq"},
-    2: {"name": "Dow Jones", "ticker": "^DJI", "key": "dow"}
-}
 
 # Add a light separator before tabs content
 st.markdown('<hr style="margin-top: 0; margin-bottom: 15px; border: none; height: 1px; background-color: #f0f2f6;">', unsafe_allow_html=True)
 
-# Handle each market index tab
-for i, tab in enumerate(market_tabs):
-    with tab:
-        market_info = market_tickers[i]
-        market_name = market_info["name"]
-        market_ticker = market_info["ticker"]
-        market_key = market_info["key"]
-        
-        # Update active index
-        st.session_state.active_index = market_key
-        
-        # Display market specific heading
-        st.markdown(f"### {market_name} Market Drop Analysis")
-        
-        # Create sub-tabs for different analysis views
-        sub_tabs = st.tabs([
-            "📈 Historical Performance", 
-            "🤖 ML Predictions"
-        ])
-        
-        # Check if we need to fetch data for this index
-        with st.spinner(f"Fetching {market_name} data..."):
-            # Only load data if this tab is active and index not already loaded
-            if market_key not in st.session_state.loaded_indices:
-                # Fetch market data for this ticker
-                data = fetch_market_data(
-                    market_ticker,
-                    st.session_state.date_range[0], 
-                    st.session_state.date_range[1]
-                )
-                
-                if data is not None and not data.empty:
-                    # Calculate technical indicators
-                    data = calculate_technical_indicators(data)
-                    
-                    # Detect drop events
-                    drop_events = detect_drop_events(data, st.session_state.drop_threshold)
-                    
-                    consecutive_drop_events = detect_consecutive_drops(
-                        data, 
-                        st.session_state.drop_threshold, 
-                        st.session_state.consecutive_days
-                    ) if st.session_state.consecutive_days > 1 else None
-                    
-                    # Store data in session state for this specific index
-                    st.session_state[f'{market_key}_data'] = data
-                    st.session_state[f'{market_key}_drop_events'] = drop_events
-                    st.session_state[f'{market_key}_consecutive_drop_events'] = consecutive_drop_events
-                    
-                    # Keep compatibility with old variable names for S&P 500
-                    if market_key == 'sp500':
-                        st.session_state.data = data
-                        st.session_state.drop_events = drop_events
-                        st.session_state.consecutive_drop_events = consecutive_drop_events
-                    
-                    # Add to loaded indices set
-                    st.session_state.loaded_indices.add(market_key)
-                    
-                    # Success message
-                    st.success(f"✅ {market_name} data loaded successfully!")
-                    
-                elif market_key not in st.session_state.loaded_indices:
-                    st.error(f"Failed to fetch {market_name} data. Please check your internet connection and try again.")
-                    
-            # Make sure current data is set for analysis functions
-            if market_key in st.session_state.loaded_indices:
-                # Set the active data for compatibility with the analysis functions
-                st.session_state.data = st.session_state[f'{market_key}_data']
-                st.session_state.drop_events = st.session_state[f'{market_key}_drop_events']
-                st.session_state.consecutive_drop_events = st.session_state[f'{market_key}_consecutive_drop_events']
-            
-        # Populate sub-tabs with content
-        with sub_tabs[0]:
-            show_historical_performance()
+# Populate tabs with content
+with tabs[0]:
+    show_historical_performance()
 
-        with sub_tabs[1]:
-            show_ml_predictions()
+with tabs[1]:
+    show_ml_predictions()
 
 # Add footer
 st.markdown("""
