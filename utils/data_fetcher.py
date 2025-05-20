@@ -43,7 +43,7 @@ def calculate_backoff_time(attempt, base_delay=5, max_delay=60):
     return delay + jitter
 
 @st.cache_data(ttl=1800)  # Cache data for 30 minutes
-def fetch_market_data(index_name="S&P 500", start_date=None, end_date=None, include_volatility=True, max_retries=3, retry_delay=5):
+def fetch_market_data(index_name="S&P 500", start_date=None, end_date=None, include_volatility=True, max_retries=5, retry_delay=10):
     """
     Fetch market index data from Yahoo Finance with improved robustness
     

@@ -305,18 +305,31 @@ with st.spinner(f"Fetching {st.session_state.selected_index} data..."):
         reload_data = True
     
     if reload_data:
+        # Create a status message area
+        status_msg = st.empty()
+        
+        # Add a delay before fetching to reduce rate limit issues
+        import time
+        status_msg.info(f"Preparing to fetch {st.session_state.selected_index} data with delay timer...")
+        time.sleep(3)  # Short delay before starting the fetch
+        
         # Fetch data for the selected index
+        status_msg.info(f"Fetching {st.session_state.selected_index} data from {st.session_state.date_range[0]} to {st.session_state.date_range[1]}...")
         data = fetch_market_data(
             index_name=st.session_state.selected_index,
             start_date=st.session_state.date_range[0], 
-            end_date=st.session_state.date_range[1]
+            end_date=st.session_state.date_range[1],
+            max_retries=5,  # Increase retries
+            retry_delay=10  # Longer delay between retries
         )
         
         if data is not None and not data.empty:
             # Calculate technical indicators
+            status_msg.info("Calculating technical indicators...")
             data = calculate_technical_indicators(data)
             
             # Detect drop events
+            status_msg.info("Detecting market drop events...")
             drop_events = detect_drop_events(data, st.session_state.drop_threshold)
             
             consecutive_drop_events = detect_consecutive_drops(
@@ -332,8 +345,11 @@ with st.spinner(f"Fetching {st.session_state.selected_index} data..."):
             
             # Cache data
             cache_data(data, drop_events, consecutive_drop_events)
+            
+            # Show success message
+            status_msg.success(f"Successfully loaded {st.session_state.selected_index} data with {len(data)} days")
         else:
-            st.error(f"Failed to fetch {st.session_state.selected_index} data. Please check your internet connection and try again.")
+            status_msg.error(f"Failed to fetch {st.session_state.selected_index} data. Please try a shorter date range or wait a few minutes before trying again.")
 
 # Create tabs with icons for better visual organization
 tabs = st.tabs([
@@ -350,6 +366,16 @@ with tabs[0]:
 
 with tabs[1]:
     show_ml_predictions()
+
+# Add a note about API rate limits
+st.markdown("""
+<div style="border: 1px solid #f0f2f6; border-radius: 5px; padding: 10px; background-color: #f8f9fa; margin-top: 20px;">
+    <p style="font-size: 0.8rem; color: #5A6570; margin: 0;">
+        <strong>Note:</strong> This application uses Yahoo Finance API which has rate limits. 
+        For best results, use shorter date ranges (1-2 years) and allow time between selecting different market indices.
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # Add footer
 st.markdown("""
