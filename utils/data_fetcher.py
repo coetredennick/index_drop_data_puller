@@ -44,51 +44,25 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=5, retr
     
     for retry in range(max_retries):
         try:
-            # Fetch S&P 500 data
-            # If an API key is provided, use it
-            if api_key:
-                # Configure yfinance with the API key (implementation may vary based on yfinance version)
-                try:
-                    # Try to set the API key if supported
-                    if hasattr(yf, 'set_api_key'):
-                        yf.set_api_key(api_key)
-                    
-                    # or use requests session method if that's supported
-                    elif hasattr(yf, 'Session'):
-                        session = yf.Session()
-                        session.headers['X-API-KEY'] = api_key
-                        sp500 = yf.download(
-                            "^GSPC",
-                            start=start_date,
-                            end=end_date,
-                            progress=False,
-                            session=session
-                        )
-                        
-                        if sp500 is not None and not sp500.empty:
-                            # We got data, break the retry loop
-                            break
-                    else:
-                        # Log that API key is not supported by this yfinance version
-                        print("API key provided but not supported by current yfinance version")
-                except Exception as api_key_error:
-                    print(f"Error setting API key: {api_key_error}")
-                    # Continue without API key
+            # Use a more resilient approach to fetch S&P 500 data
+            ticker = yf.Ticker("^GSPC")
             
-            # Standard download without API key
-            sp500 = yf.download(
-                "^GSPC",
+            # Get historical data with proper error handling
+            sp500 = ticker.history(
                 start=start_date,
                 end=end_date,
-                progress=False
+                interval="1d"
             )
             
-            if sp500 is not None and not sp500.empty:
+            # Verify we got valid data
+            if sp500 is not None and not sp500.empty and len(sp500) > 3:
                 # We got data, break the retry loop
+                print(f"Successfully retrieved {len(sp500)} days of S&P 500 data")
                 break
             else:
-                # Empty DataFrame, wait and retry
-                time.sleep(retry_delay)
+                # Empty or insufficient DataFrame, wait and retry
+                print(f"Retry {retry+1}/{max_retries}: Got empty or incomplete data")
+                time.sleep(retry_delay * 2)  # Longer delay for empty results
                 continue
                 
         except Exception as e:

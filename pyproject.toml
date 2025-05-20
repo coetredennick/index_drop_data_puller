@@ -11,5 +11,5 @@ dependencies = [
     "statsmodels>=0.14.4",
     "streamlit>=1.44.1",
     "trafilatura>=2.0.0",
-    "yfinance>=0.2.55",
+    "yfinance==0.2.28",
 ]

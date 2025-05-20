@@ -341,37 +341,21 @@ with st.spinner("Fetching S&P 500 data..."):
         else:
             fetch_start_date = st.session_state.date_range[0]
         
+        # Set a much smaller date range for initial testing
+        today = datetime.today()
+        recent_start_date = (today - timedelta(days=30)).strftime('%Y-%m-%d')
+        
+        # For initial loading, use a very recent, small dataset to avoid rate limits
+        if st.session_state.data is None and shorter_range:
+            st.info("Loading a recent 30-day sample first to initialize the app. You can load more data after this.")
+            fetch_start_date = recent_start_date
+        
         # Check if user provided an API key
         api_key = st.session_state.get('yf_api_key', None)
         
-        # Ask user if they'd like to use their own credentials for Yahoo Finance
-        if st.session_state.get('yahoo_finance_api_issues', False):
-            st.warning("""
-            Yahoo Finance API rate limits have been reached. For reliable access to market data:
-            
-            1. Try again in a few minutes as rate limits may reset
-            2. Adjust to a shorter date range (e.g., 1 year instead of multiple years)
-            3. Use your own API credentials if you have access to financial data APIs
-            """)
-            
-            # Add option to use Alpha Vantage as an alternative data source
-            use_alt_source = st.checkbox("Use Alternative Data Source (Alpha Vantage)", 
-                                     help="Alpha Vantage provides free financial data APIs with higher rate limits")
-            
-            if use_alt_source:
-                # Ask for API key if not already provided
-                if 'alpha_vantage_api_key' not in st.session_state:
-                    alpha_vantage_key = st.text_input("Alpha Vantage API Key", 
-                                                 type="password",
-                                                 help="Get a free API key from alphavantage.co")
-                    if alpha_vantage_key:
-                        st.session_state.alpha_vantage_api_key = alpha_vantage_key
-                        st.success("API key saved!")
-            
-            # Will continue with Yahoo Finance attempts for now,
-            # as implementing Alpha Vantage would require additional development
-        else:
-            # Fetch data with retry settings
+        # Fetch data with retry settings and a more conservative approach
+        data = None
+        try:
             data = fetch_sp500_data(
                 fetch_start_date, 
                 st.session_state.date_range[1],
@@ -379,6 +363,35 @@ with st.spinner("Fetching S&P 500 data..."):
                 retry_delay=delay,
                 api_key=api_key
             )
+        except Exception as e:
+            st.error(f"Error fetching data: {e}")
+        
+        # If API rate limit error occurred
+        if data is None:
+            # Show friendly guidance
+            st.warning("""
+            We're having trouble accessing market data from Yahoo Finance. This could be due to:
+            
+            1. API rate limits (very common)
+            2. Network connectivity issues
+            3. Data service availability
+            
+            **What you can do:**
+            - Try a smaller date range (e.g., last 3 months instead of multiple years)
+            - Wait a few minutes and try again
+            - Use the refresh button below
+            """)
+            
+            # Important - give user clear action steps
+            if st.button("⟳ Refresh Data (Try Again)"):
+                # Clear the cached API failure flag
+                if 'yahoo_finance_api_issues' in st.session_state:
+                    del st.session_state.yahoo_finance_api_issues
+                # Try a smaller date range automatically
+                if shorter_range:
+                    st.session_state.last_fetch_attempt = recent_start_date
+                st.session_state.data = None
+                st.rerun()
         
         if data is not None and not data.empty:
             # Calculate technical indicators
