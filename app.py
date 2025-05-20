@@ -177,7 +177,9 @@ if 'drop_threshold' not in st.session_state:
 if 'consecutive_days' not in st.session_state:
     st.session_state.consecutive_days = 1
 if 'date_range' not in st.session_state:
-    st.session_state.date_range = ('1990-01-01', datetime.today().strftime('%Y-%m-%d'))
+    # Set a default date range - 20 years back from today to today
+    twenty_years_ago = (datetime.today() - timedelta(days=365*20)).strftime('%Y-%m-%d')
+    st.session_state.date_range = (twenty_years_ago, datetime.today().strftime('%Y-%m-%d'))
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'drop_events' not in st.session_state:
@@ -353,8 +355,10 @@ with st.spinner("Fetching S&P 500 data..."):
         # Check if user provided an API key
         api_key = st.session_state.get('yf_api_key', None)
         
-        # Fetch data with retry settings and a more conservative approach
+        # Attempt to fetch data from Yahoo Finance
         data = None
+        
+        # First, try the standard method with yfinance
         try:
             data = fetch_sp500_data(
                 fetch_start_date, 
@@ -365,6 +369,30 @@ with st.spinner("Fetching S&P 500 data..."):
             )
         except Exception as e:
             st.error(f"Error fetching data: {e}")
+        
+        # If standard method fails, try pandas-datareader
+        if data is None or data.empty:
+            st.warning("Trying alternative data source for S&P 500 historical data...")
+            
+            # Ask if user wants to use pandas-datareader alternative
+            if st.button("Fetch Data Using Alternative Source"):
+                with st.spinner("Fetching data from alternative source..."):
+                    try:
+                        # Import the alternative data source module
+                        from utils.alternative_data_source import fetch_sp500_alternative
+                        
+                        # Fetch data using pandas-datareader
+                        data = fetch_sp500_alternative(
+                            fetch_start_date,
+                            st.session_state.date_range[1],
+                            max_retries=retries,
+                            retry_delay=delay
+                        )
+                        
+                        if data is not None and not data.empty:
+                            st.success("Successfully retrieved data from alternative source!")
+                    except Exception as alt_error:
+                        st.error(f"Error fetching data from alternative source: {alt_error}")
         
         # If API rate limit error occurred
         if data is None:

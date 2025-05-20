@@ -560,6 +560,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pandas-datareader"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lxml" },
+    { name = "pandas" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cf/94/b0363da3981da77d3ec7990e89006e4d4f71fd71a82290ce5c85540a7019/pandas-datareader-0.10.0.tar.gz", hash = "sha256:9fc3c63d39bc0c10c2683f1c6d503ff625020383e38f6cbe14134826b454d5a6", size = 95477 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/16/56c9d648b503619ebe96f726b5f642b68e299b34162ed2d6faa9d7966b7d/pandas_datareader-0.10.0-py3-none-any.whl", hash = "sha256:0b95ff3635bc3ee1a6073521b557ab0e3c39d219f4a3b720b6b0bc6e8cdb4bb7", size = 109460 },
+]
+
+[[package]]
 name = "pandas-ta"
 version = "0.3.14b0"
 source = { registry = "https://pypi.org/simple" }
@@ -579,6 +593,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/d1/81/74f6a65b848ffd16c
 wheels = [
     { url = "https://files.pythonhosted.org/packages/87/2b/b50d3d08ea0fc419c183a84210571eba005328efa62b6b98bc28e9ead32a/patsy-1.0.1-py2.py3-none-any.whl", hash = "sha256:751fb38f9e97e62312e921a1954b81e1bb2bcda4f5eeabaf94db251ee791509c", size = 232923 },
 ]
+
+[[package]]
+name = "peewee"
+version = "3.18.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/ce/c2bb58d00cb12d19dea28d5a98d05a14350197a3d03eba60be9bae708bac/peewee-3.18.1.tar.gz", hash = "sha256:a76a694b3b3012ce22f00d51fd83e55bf80b595275a90ed62cd36eb45496cf1d", size = 3026130 }
 
 [[package]]
 name = "pillow"
@@ -798,6 +818,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "pandas" },
+    { name = "pandas-datareader" },
     { name = "pandas-ta" },
     { name = "plotly" },
     { name = "scikit-learn" },
@@ -810,13 +831,14 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "pandas", specifier = ">=2.2.3" },
+    { name = "pandas-datareader", specifier = ">=0.10.0" },
     { name = "pandas-ta", specifier = ">=0.3.14b0" },
     { name = "plotly", specifier = ">=6.0.1" },
     { name = "scikit-learn", specifier = ">=1.6.1" },
     { name = "statsmodels", specifier = ">=0.14.4" },
     { name = "streamlit", specifier = ">=1.44.1" },
     { name = "trafilatura", specifier = ">=2.0.0" },
-    { name = "yfinance", specifier = "==0.2.28" },
+    { name = "yfinance", specifier = "==0.2.31" },
 ]
 
 [[package]]
@@ -1214,7 +1236,7 @@ wheels = [
 
 [[package]]
 name = "yfinance"
-version = "0.2.28"
+version = "0.2.31"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "appdirs" },
@@ -1225,10 +1247,11 @@ dependencies = [
     { name = "multitasking" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "peewee" },
     { name = "pytz" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/22/1d/a30417fe011b31265d3e4666bc4e0f169f841b1d6bf504c52f7c7020302b/yfinance-0.2.28.tar.gz", hash = "sha256:be89cd2a4d55c0a2a6227c32915b355bde59f85c569dca9123320322445901ff", size = 63007 }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/e1/de1ad132556e5af8c8363310d11a0982fede5248e7c2e53a61a42432ef99/yfinance-0.2.31.tar.gz", hash = "sha256:4e09959a6b838c9ade9fdfe054d2663d5543c8b3ec8b463d17ce4789a3a0b3c4", size = 63285 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e9/43/93ea65227c938a0a4a8925d7f054b050ea743044b887170da9eca210635a/yfinance-0.2.28-py2.py3-none-any.whl", hash = "sha256:9697dcbc38d67d1172a905fd5787c65bf049d87e18a709be788485ad7886791c", size = 65317 },
+    { url = "https://files.pythonhosted.org/packages/e6/b3/388ab967a387cc92926f70e97688dd9a7189b29a0773db815ffc5289e2b5/yfinance-0.2.31-py2.py3-none-any.whl", hash = "sha256:a2367c8f07fbeca95fc9e5ec46c2c8d0c41ab06b2c91f60d4a04c06aa01c7fba", size = 65552 },
 ]

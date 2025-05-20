@@ -44,24 +44,48 @@ def fetch_sp500_data(start_date, end_date, include_vix=True, max_retries=5, retr
     
     for retry in range(max_retries):
         try:
-            # Use a more resilient approach to fetch S&P 500 data
-            ticker = yf.Ticker("^GSPC")
+            # Instead of using the Ticker object directly, use the download function
+            # which tends to be more reliable for long historical periods
+            print(f"Attempting to fetch S&P 500 data from {start_date} to {end_date}")
             
-            # Get historical data with proper error handling
-            sp500 = ticker.history(
-                start=start_date,
-                end=end_date,
-                interval="1d"
-            )
+            # For long time periods, we'll use periods instead of specific dates to reduce issues
+            years_back = 20
+            if pd.to_datetime(start_date) < (pd.to_datetime('today') - pd.DateOffset(years=years_back)):
+                print(f"Fetching extended historical data (approximately {years_back} years)...")
+                
+                # Use the download function with period parameter for maximum reliability
+                sp500 = yf.download(
+                    "^GSPC",  # S&P 500 ticker
+                    period="max",  # Get maximum available history
+                    interval="1d",  # Daily data
+                    progress=False,  # Don't show progress
+                    ignore_tz=True,  # Ignore timezone issues
+                    threads=False  # Disable threading to reduce errors
+                )
+                
+                # Now filter to the requested date range after downloading
+                if not sp500.empty:
+                    # Filter to the requested date range
+                    sp500 = sp500.loc[start_date:end_date]
+            else:
+                # For shorter periods, we can use the standard approach
+                sp500 = yf.download(
+                    "^GSPC",
+                    start=start_date,
+                    end=end_date,
+                    progress=False,
+                    ignore_tz=True,
+                    threads=False
+                )
             
             # Verify we got valid data
-            if sp500 is not None and not sp500.empty and len(sp500) > 3:
+            if sp500 is not None and not sp500.empty and len(sp500) > 5:
                 # We got data, break the retry loop
                 print(f"Successfully retrieved {len(sp500)} days of S&P 500 data")
                 break
             else:
                 # Empty or insufficient DataFrame, wait and retry
-                print(f"Retry {retry+1}/{max_retries}: Got empty or incomplete data")
+                print(f"Retry {retry+1}/{max_retries}: Got empty or insufficient data")
                 time.sleep(retry_delay * 2)  # Longer delay for empty results
                 continue
                 
