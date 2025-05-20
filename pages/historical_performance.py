@@ -73,11 +73,14 @@ def show_historical_performance():
             "Consecutive Drops": "consecutive"
         }
         
+        # Check which market is active and create a unique key for each market
+        active_index = st.session_state.active_index if 'active_index' in st.session_state else 'sp500'
+        
         event_filter = st.selectbox(
             "Event Type Filter:",
             options=list(event_type_options.keys()),
             index=0,
-            key="historical_event_type_filter"
+            key=f"historical_event_type_filter_{active_index}"
         )
         
         # Get the selected event type value
