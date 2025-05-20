@@ -370,13 +370,13 @@ with st.spinner("Fetching S&P 500 data..."):
         except Exception as e:
             st.error(f"Error fetching data: {e}")
         
-        # If standard method fails, try pandas-datareader
+        # If standard method fails, offer alternative data source
         if data is None or data.empty:
-            st.warning("Trying alternative data source for S&P 500 historical data...")
+            st.warning("Yahoo Finance API couldn't provide data. Try our alternative data source for reliable S&P 500 historical data.")
             
-            # Ask if user wants to use pandas-datareader alternative
-            if st.button("Fetch Data Using Alternative Source"):
-                with st.spinner("Fetching data from alternative source..."):
+            # Create a clear button for alternative source
+            if st.button("📈 Fetch Data Using FRED or Pandas-Datareader"):
+                with st.spinner("Fetching data from verified alternative sources..."):
                     try:
                         # Import the alternative data source module
                         from utils.alternative_data_source import fetch_sp500_alternative
@@ -390,9 +390,11 @@ with st.spinner("Fetching S&P 500 data..."):
                         )
                         
                         if data is not None and not data.empty:
-                            st.success("Successfully retrieved data from alternative source!")
+                            st.success(f"✅ Successfully retrieved {len(data)} days of authentic market data!")
+                        else:
+                            st.error("Unable to retrieve data from alternative sources.")
                     except Exception as alt_error:
-                        st.error(f"Error fetching data from alternative source: {alt_error}")
+                        st.error(f"Error retrieving data: {alt_error}")
         
         # If API rate limit error occurred
         if data is None:

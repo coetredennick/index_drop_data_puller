@@ -130,6 +130,17 @@ def fetch_sp500_alternative(start_date, end_date, max_retries=3, retry_delay=5):
         # Clean up any NaN values
         sp500 = sp500.fillna(method='ffill').fillna(method='bfill')
         
+        # Make sure the data is complete enough for technical indicators
+        from utils.technical_indicators import calculate_technical_indicators
+        
+        try:
+            # Calculate technical indicators
+            sp500 = calculate_technical_indicators(sp500)
+            print(f"Successfully calculated technical indicators for {len(sp500)} days of data")
+        except Exception as e:
+            print(f"Error calculating technical indicators: {e}")
+            # Continue with the data we have even if indicators failed
+            
         # Return the processed data
         return sp500
     
