@@ -6,7 +6,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from datetime import datetime, timedelta
 
-def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", height=700):
+def create_price_chart(data, drop_events=None, title="Price Chart", index_name="S&P 500", height=700):
     """
     Create an interactive price chart with marked drop events, VIX, and RSI panels
     
@@ -18,6 +18,8 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
         List of drop events to mark on the chart
     title : str, optional
         Chart title
+    index_name : str, optional
+        Name of the index for subplot titles and trace names (e.g., 'S&P 500')
     height : int, optional
         Chart height in pixels
         
@@ -38,7 +40,7 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
             [{"secondary_y": False}],  # VIX
             [{"secondary_y": False}]   # RSI
         ],
-        subplot_titles=["S&P 500 Price & Volume", "VIX (Volatility)", "RSI (14-day)"]
+        subplot_titles=[f"{index_name} Price & Volume", "Volatility (ATR %)", "RSI (14-day)"],
     )
     
     # PANEL 1: PRICE & VOLUME
@@ -47,7 +49,7 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
         go.Scatter(
             x=data.index,
             y=data['Close'],
-            name="S&P 500",
+            name=index_name,
             line=dict(color='#0E6EFD', width=1.5),
             opacity=0.8,
         ),
@@ -106,201 +108,92 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
     
     # Add drop event markers if provided
     if drop_events:
-        # Check if there's a filter in session state
-        current_filter = 'all'
-        if 'current_event_type_filter' in st.session_state:
-            current_filter = st.session_state.current_event_type_filter
-        
-        # Extract single-day drop events (only if allowed by filter)
-        if current_filter in ['all', 'single_day']:
-            single_day_events = [e for e in drop_events if e['type'] == 'single_day']
-        else:
-            single_day_events = []
-            
+        # The drop_events list is now assumed to be pre-filtered by the caller (e.g., in historical_performance.py using get_all_events)
+        # Thus, we directly use the event types present in the provided list.
+
+        single_day_events = [e for e in drop_events if e['type'] == 'single_day']
+        consecutive_events = [e for e in drop_events if e['type'] == 'consecutive']
+
+        # Process single-day events
         if single_day_events:
             event_dates = [e['date'] for e in single_day_events]
-            event_prices = [data.loc[date, 'Close'] if date in data.index else None for date in event_dates]
-            event_sizes = [abs(e['drop_pct'])*2 for e in single_day_events]  # Size based on drop magnitude
-            event_colors = ['rgba(255, 0, 0, 0.8)' for _ in single_day_events]
+            # Ensure event_prices are correctly fetched, handling cases where a date might not be in data.index
+            event_prices = []
+            valid_event_dates_single = []
+            for date in event_dates:
+                if date in data.index:
+                    event_prices.append(data.loc[date, 'Close'])
+                    valid_event_dates_single.append(date)
+                else:
+                    # Log or handle missing date if necessary, for now, skip
+                    pass 
             
-            # Add markers to price chart
-            fig.add_trace(
-                go.Scatter(
-                    x=event_dates,
-                    y=event_prices,
-                    mode='markers',
-                    marker=dict(
-                        size=event_sizes,
-                        color=event_colors,
-                        line=dict(width=1, color='DarkSlateGrey'),
-                        symbol='triangle-down'
+            if valid_event_dates_single: # only add trace if there are valid events
+                fig.add_trace(
+                    go.Scatter(
+                        x=valid_event_dates_single,
+                        y=event_prices,
+                        mode='markers',
+                        marker=dict(symbol='diamond', size=10, color='rgba(255, 0, 0, 0.7)', line=dict(width=1, color='DarkSlateGrey')),
+                        name='Single-Day Drop',
+                        text=[f"{e['severity']}: {e['drop_pct']:.2f}%" for e in single_day_events if e['date'] in valid_event_dates_single],
+                        hoverinfo='text'
                     ),
-                    name="Drop Events",
-                    text=[f"{e['date'].strftime('%Y-%m-%d')}: {e['drop_pct']:.2f}%" for e in single_day_events],
-                    hoverinfo="text",
-                ),
-                row=1, col=1, secondary_y=False,
-            )
-            
-            # Also add markers to the VIX panel
-            if 'ATR_Pct' in data.columns:
-                vix_values = [data.loc[date, 'ATR_Pct'] if date in data.index and not pd.isna(data.loc[date, 'ATR_Pct']) else None for date in event_dates]
-                
-                # Filter out None values
-                valid_dates = []
-                valid_values = []
-                valid_sizes = []
-                valid_texts = []
-                
-                for i, (date, value, size, event) in enumerate(zip(event_dates, vix_values, event_sizes, single_day_events)):
-                    if value is not None:
-                        valid_dates.append(date)
-                        valid_values.append(value)
-                        valid_sizes.append(size)
-                        valid_texts.append(f"{event['date'].strftime('%Y-%m-%d')}: {event['drop_pct']:.2f}%")
-                
-                if valid_dates:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=valid_dates,
-                            y=valid_values,
-                            mode='markers',
-                            marker=dict(
-                                size=[s*0.8 for s in valid_sizes],  # Slightly smaller
-                                color='rgba(255, 0, 0, 0.8)',
-                                symbol='triangle-down'
-                            ),
-                            name="",
-                            text=valid_texts,
-                            hoverinfo="text",
-                            showlegend=False,
-                        ),
-                        row=2, col=1,
-                    )
-            
-            # Also add markers to the RSI panel
-            if 'RSI_14' in data.columns:
-                rsi_values = [data.loc[date, 'RSI_14'] if date in data.index and not pd.isna(data.loc[date, 'RSI_14']) else None for date in event_dates]
-                
-                # Filter out None values
-                valid_dates = []
-                valid_values = []
-                valid_sizes = []
-                valid_texts = []
-                
-                for i, (date, value, size, event) in enumerate(zip(event_dates, rsi_values, event_sizes, single_day_events)):
-                    if value is not None:
-                        valid_dates.append(date)
-                        valid_values.append(value)
-                        valid_sizes.append(size)
-                        valid_texts.append(f"{event['date'].strftime('%Y-%m-%d')}: {event['drop_pct']:.2f}%")
-                
-                if valid_dates:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=valid_dates,
-                            y=valid_values,
-                            mode='markers',
-                            marker=dict(
-                                size=[s*0.8 for s in valid_sizes],  # Slightly smaller
-                                color='rgba(255, 0, 0, 0.8)',
-                                symbol='triangle-down'
-                            ),
-                            name="",
-                            text=valid_texts,
-                            hoverinfo="text",
-                            showlegend=False,
-                        ),
-                        row=3, col=1,
-                    )
-        
-        # Extract consecutive drop events (only if allowed by filter)
-        if current_filter in ['all', 'consecutive']:
-            consecutive_events = [e for e in drop_events if e['type'] == 'consecutive']
-        else:
-            consecutive_events = []
-            
+                    row=1, col=1, secondary_y=False,
+                )
+
+        # Process consecutive drop events
         if consecutive_events:
+            # For consecutive drops, mark the end date of the event period
+            event_end_dates = [e['date'] for e in consecutive_events]
+            # Ensure event_prices are correctly fetched
+            event_end_prices = []
+            valid_event_dates_consecutive = []
+            for date in event_end_dates:
+                if date in data.index:
+                    event_end_prices.append(data.loc[date, 'Close'])
+                    valid_event_dates_consecutive.append(date)
+                else:
+                    # Log or handle missing date
+                    pass
+
+            if valid_event_dates_consecutive: # only add trace if valid events
+                fig.add_trace(
+                    go.Scatter(
+                        x=valid_event_dates_consecutive,
+                        y=event_end_prices,
+                        mode='markers',
+                        marker=dict(symbol='star', size=12, color='rgba(139, 0, 0, 0.8)', line=dict(width=1, color='Black')),
+                        name='Consecutive Drop End',
+                        text=[f"{e['severity']}: {e['cumulative_drop']:.2f}% over {e['num_days']}d" for e in consecutive_events if e['date'] in valid_event_dates_consecutive],
+                        hoverinfo='text'
+                    ),
+                    row=1, col=1, secondary_y=False,
+                )
+
+            # Optionally, add shaded regions for the duration of consecutive drops
             for event in consecutive_events:
-                # Add rectangle to highlight consecutive drop period
-                start_date = event['start_date']
-                end_date = event['date']
-                
-                # Get y-range for the rectangle
-                if start_date in data.index and end_date in data.index:
-                    period_data = data.loc[start_date:end_date]
-                    y_min = period_data['Low'].min() * 0.98
-                    y_max = period_data['High'].max() * 1.02
-                    
-                    # Highlight on the price chart
-                    fig.add_shape(
-                        type="rect",
+                start_date = event.get('start_date')
+                end_date = event.get('date')
+                if start_date and end_date and start_date in data.index and end_date in data.index:
+                    fig.add_vrect(
                         x0=start_date,
                         x1=end_date,
-                        y0=y_min,
-                        y1=y_max,
-                        line=dict(
-                            color="rgba(255, 0, 0, 0.3)",
-                            width=2,
-                        ),
-                        fillcolor="rgba(255, 0, 0, 0.1)",
-                        opacity=0.5,
+                        fillcolor="rgba(255, 165, 0, 0.1)", # Light orange
                         layer="below",
+                        line_width=0,
                         row=1, col=1
                     )
-                    
-                    # Highlight the same period on VIX panel
-                    if 'ATR_Pct' in data.columns:
-                        vix_period_data = data.loc[start_date:end_date]
-                        vix_min = vix_period_data['ATR_Pct'].min() * 0.9 if not pd.isna(vix_period_data['ATR_Pct'].min()) else 0
-                        vix_max = vix_period_data['ATR_Pct'].max() * 1.1 if not pd.isna(vix_period_data['ATR_Pct'].max()) else 0
-                        
-                        fig.add_shape(
-                            type="rect",
-                            x0=start_date,
-                            x1=end_date,
-                            y0=vix_min,
-                            y1=vix_max,
-                            line=dict(
-                                color="rgba(255, 0, 0, 0.3)",
-                                width=1,
-                            ),
-                            fillcolor="rgba(255, 0, 0, 0.1)",
-                            opacity=0.5,
-                            layer="below",
-                            row=2, col=1
-                        )
-                    
-                    # Highlight the same period on RSI panel
-                    if 'RSI_14' in data.columns:
-                        rsi_period_data = data.loc[start_date:end_date]
-                        rsi_min = rsi_period_data['RSI_14'].min() * 0.9 if not pd.isna(rsi_period_data['RSI_14'].min()) else 0
-                        rsi_max = rsi_period_data['RSI_14'].max() * 1.1 if not pd.isna(rsi_period_data['RSI_14'].max()) else 100
-                        
-                        fig.add_shape(
-                            type="rect",
-                            x0=start_date,
-                            x1=end_date,
-                            y0=rsi_min,
-                            y1=rsi_max,
-                            line=dict(
-                                color="rgba(255, 0, 0, 0.3)",
-                                width=1,
-                            ),
-                            fillcolor="rgba(255, 0, 0, 0.1)",
-                            opacity=0.5,
-                            layer="below",
-                            row=3, col=1
-                        )
     
     # Update layout
     fig.update_layout(
-        title=title,
+        title_text=title,  # Use the passed title parameter
+        title_x=0.5, # Center title
         height=height,
         template="plotly_white",
         hovermode="x unified",
         # Update subplot y-axis titles
-        yaxis=dict(title="Price ($)"),
+        yaxis=dict(title=f"{index_name} Price ($)"),
         yaxis2=dict(title="Volume", showgrid=False, tickformat=".2s"),
         yaxis3=dict(title="Volatility (%)"),
         yaxis4=dict(title="RSI"),
@@ -315,7 +208,7 @@ def create_price_chart(data, drop_events=None, title="S&P 500 Price Chart", heig
     )
     
     # Configure y-axes
-    fig.update_yaxes(title_text="Price ($)", secondary_y=False)
+    fig.update_yaxes(title_text=f"{index_name} Price ($)", secondary_y=False)
     fig.update_yaxes(
         title_text="Volume", 
         secondary_y=True, 
@@ -593,8 +486,8 @@ def create_recovery_chart(data, event, title="Post-Drop Recovery", height=400):
             
             # Only proceed if we have a valid date range
             if range_start <= range_end and not period_data.loc[range_start:range_end].empty:
-                y_min = min(0, period_data.loc[range_start:range_end, 'Normalized'].min()) - 1
-                y_max = max(0, period_data.loc[range_start:range_end, 'Normalized'].max()) + 1
+                y_min = min(0, period_data['Normalized'].min()) - 2
+                y_max = max(0, period_data['Normalized'].max()) + 2
                 
                 fig.add_shape(
                     type="rect",
@@ -1013,25 +906,17 @@ def create_distribution_histogram(drop_events, title="Distribution of Drop Event
         )
         return fig
     
-    # Check if there's a filter in session state
-    current_filter = 'all'
-    if 'current_event_type_filter' in st.session_state:
-        current_filter = st.session_state.current_event_type_filter
+    # The drop_events list is now assumed to be pre-filtered by the caller.
+    # We will use the events as they are provided.
+    filtered_events = drop_events # Directly use the provided drop_events
     
-    # Filter events based on the current filter
-    filtered_events = []
-    if current_filter == 'all':
-        filtered_events = drop_events
-    else:
-        filtered_events = [e for e in drop_events if e['type'] == current_filter]
-    
-    # If no events match the filter
+    # If no events match the filter (or if the pre-filtered list is empty)
     if not filtered_events:
         fig = go.Figure()
         fig.update_layout(
             title=title,
             annotations=[dict(
-                text=f"No {current_filter} events to display",
+                text="No events to display in histogram",
                 xref="paper",
                 yref="paper",
                 x=0.5,

@@ -318,34 +318,43 @@ def get_drop_severity(drop_pct):
     else:
         return 'Minor'
 
-def get_all_events(event_type='all'):
+def get_all_events(event_type='all', drop_events=None, consecutive_drop_events=None):
     """
     Combine single-day and consecutive drop events
     
     Parameters:
     -----------
     event_type : str, optional
-        Type of events to include: 'all', 'single_day', or 'consecutive'
+        Type of events to include: 'all', 'single_day', or 'consecutive'. Defaults to 'all'.
+    drop_events : list, optional
+        List of single-day drop events. Defaults to None.
+    consecutive_drop_events : list, optional
+        List of consecutive drop events. Defaults to None.
         
     Returns:
     --------
     list
         Filtered and sorted list of drop events
     """
-    all_events = []
+    all_events_list = [] # Renamed to avoid conflict with the outer scope variable if any
     
+    # Ensure input lists are not None before extending
+    current_drop_events = drop_events if drop_events is not None else []
+    current_consecutive_drop_events = consecutive_drop_events if consecutive_drop_events is not None else []
+
     # Add single-day drop events if requested
-    if (event_type == 'all' or event_type == 'single_day') and st.session_state.drop_events:
-        all_events.extend(st.session_state.drop_events)
+    if event_type == 'all' or event_type == 'single_day':
+        all_events_list.extend(current_drop_events)
     
     # Add consecutive drop events if requested
-    if (event_type == 'all' or event_type == 'consecutive') and st.session_state.consecutive_drop_events:
-        all_events.extend(st.session_state.consecutive_drop_events)
+    if event_type == 'all' or event_type == 'consecutive':
+        all_events_list.extend(current_consecutive_drop_events)
     
     # Sort by date (newest first)
-    all_events.sort(key=lambda x: x['date'], reverse=True)
+    if all_events_list:
+        all_events_list.sort(key=lambda x: x['date'], reverse=True)
     
-    return all_events
+    return all_events_list
 
 def get_event_label(event):
     """

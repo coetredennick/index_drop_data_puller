@@ -12,7 +12,13 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 from utils.event_detection import get_all_events, get_drop_severity
 from utils.visualizations import create_price_chart, create_returns_heatmap, create_distribution_histogram
 
-def show_historical_performance():
+def show_historical_performance(
+    market_data, 
+    drop_events_for_ticker, 
+    consecutive_drop_events_for_ticker, 
+    active_ticker_symbol, 
+    active_ticker_name
+):
     """
     Display the Historical Performance tab with aggregate return analysis,
     event distribution, and detailed return database
@@ -58,13 +64,13 @@ def show_historical_performance():
     </style>
     """, unsafe_allow_html=True)
     # Check if data and events are available
-    data_available = st.session_state.data is not None and not st.session_state.data.empty
+    data_available = market_data is not None and not market_data.empty
     
     # Initialize all_events to empty list as default
     all_events = []
     
     if not data_available:
-        st.warning("No data available. Please adjust the date range and fetch data.")
+        st.warning(f"No data available for {active_ticker_name}. Please adjust the date range and fetch data in the main settings.")
     else:
         # Add event type filter
         event_type_options = {
@@ -73,34 +79,56 @@ def show_historical_performance():
             "Consecutive Drops": "consecutive"
         }
         
+        # Use a unique key for the selectbox based on the active ticker to maintain filter state per index
+        event_filter_key = f"historical_event_type_filter_{active_ticker_symbol}"
+        
+        # Initialize current_event_type_filter_store for the active_ticker if not present in session state
+        # This was previously st.session_state.current_event_type_filter, now it's ticker specific in a dict
+        if active_ticker_symbol not in st.session_state.current_event_type_filter_store:
+            st.session_state.current_event_type_filter_store[active_ticker_symbol] = 'all' # Default to 'all'
+
+        # Find current index for selectbox based on the stored filter for the active_ticker
+        current_filter_value = st.session_state.current_event_type_filter_store[active_ticker_symbol]
+        select_box_index = 0 # default to "All Events"
+        # Iterate through the values of event_type_options to find the matching index
+        for i, option_val in enumerate(event_type_options.values()):
+            if option_val == current_filter_value:
+                select_box_index = i
+                break
+        
         event_filter = st.selectbox(
             "Event Type Filter:",
             options=list(event_type_options.keys()),
-            index=0,
-            key="historical_event_type_filter"
+            index=select_box_index, 
+            key=event_filter_key # MODIFIED KEY to be ticker-specific
         )
         
         # Get the selected event type value
         selected_event_type = event_type_options[event_filter]
         
-        # Store selected event type in session state for use across the app
-        st.session_state.current_event_type_filter = selected_event_type
+        # Store selected event type in session state for the current active ticker
+        st.session_state.current_event_type_filter_store[active_ticker_symbol] = selected_event_type # MODIFIED
         
         # Get events based on the selected filter
-        all_events = get_all_events(event_type=selected_event_type)
+        # IMPORTANT: get_all_events will need to be modified to accept these event lists
+        all_events = get_all_events(
+            event_type=selected_event_type,
+            drop_events=drop_events_for_ticker,             
+            consecutive_drop_events=consecutive_drop_events_for_ticker 
+        )
         
         if not all_events:
             if selected_event_type == "all":
-                st.warning(f"No drop events found with the current threshold ({st.session_state.drop_threshold}%). Try lowering the threshold.")
+                st.warning(f"No drop events found for {active_ticker_name} with the current threshold ({st.session_state.drop_threshold}%). Try lowering the threshold.")
             elif selected_event_type == "single_day":
-                st.warning(f"No single-day drop events found with the current threshold ({st.session_state.drop_threshold}%). Try lowering the threshold.")
+                st.warning(f"No single-day drop events found for {active_ticker_name} with the current threshold ({st.session_state.drop_threshold}%). Try lowering the threshold.")
             elif selected_event_type == "consecutive":
-                st.warning(f"No consecutive drop events found with the current threshold ({st.session_state.drop_threshold}%) and consecutive days setting ({st.session_state.consecutive_days} days). Try adjusting these parameters.")
+                st.warning(f"No consecutive drop events found for {active_ticker_name} with the current threshold ({st.session_state.drop_threshold}%) and consecutive days setting ({st.session_state.consecutive_days} days). Try adjusting these parameters.")
             
             all_events = []  # Empty list to avoid None references later
     
     # Display overview metrics
-    st.markdown("### S&P 500 Drop Events Analysis")
+    st.markdown(f"### {active_ticker_name} Drop Events Analysis")
     
     # Create cards that highlight key aggregate data 
     col1, col2, col3, col4 = st.columns(4)
@@ -175,9 +203,10 @@ def show_historical_performance():
 
     
     # Show price chart with drop events marked
-    st.markdown("### S&P 500 Price Chart with Drop Events")
-    if st.session_state.data is not None and not st.session_state.data.empty:
-        fig_price = create_price_chart(st.session_state.data, all_events)
+    st.markdown(f"### {active_ticker_name} Price Chart with Drop Events")
+    if market_data is not None and not market_data.empty:
+        dynamic_chart_title = f'{active_ticker_name} Price History with Drop Events Marked'
+        fig_price = create_price_chart(market_data, all_events, title=dynamic_chart_title)
         st.plotly_chart(fig_price, use_container_width=True)
     else:
         st.warning("Cannot create price chart. No data available. Please try adjusting the date range and fetching data again.")
@@ -380,8 +409,8 @@ def show_historical_performance():
         
         # Try to get the VIX, Volume and RSI values for this date
         try:
-            if event_date in st.session_state.data.index:
-                row_data = st.session_state.data.loc[event_date]
+            if event_date in market_data.index:
+                row_data = market_data.loc[event_date]
                 vix_value = row_data.get('VIX_Close', None)
                 volume_value = row_data.get('Volume', None)
                 rsi_value = row_data.get('RSI_14', None)
@@ -775,6 +804,6 @@ def show_historical_performance():
         st.download_button(
             label="Download Drop Events Database",
             data=csv,
-            file_name=f"sp500_drop_events_{st.session_state.drop_threshold}pct.csv",
+            file_name=f"{active_ticker_symbol}_drop_events_{st.session_state.drop_threshold}pct.csv",
             mime="text/csv",
         )
